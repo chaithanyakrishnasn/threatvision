@@ -50,7 +50,9 @@
       "Bash(git init:*)",
       "Bash(git branch:*)",
       "Bash(git config:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(grep -E \"^\\\\S+ \\\\.env$\")",
+      "Bash(git commit:*)"
     ]
   }
 }
