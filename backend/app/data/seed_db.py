@@ -10,6 +10,30 @@ from __future__ import annotations
 import asyncio
 import sys
 import os
+import random
+from datetime import datetime, timezone, timedelta
+
+
+def get_spread_timestamp() -> datetime:
+    """
+    Spread events across the last 60 minutes with realistic clustering:
+    - 60% of events in last 20 minutes (recent activity)
+    - 30% in 20-40 minutes ago
+    - 10% in 40-60 minutes ago
+    - Small random jitter so no two events have identical timestamps
+    """
+    now = datetime.now(timezone.utc)
+
+    rand = random.random()
+    if rand < 0.60:
+        minutes_ago = random.uniform(0, 20)
+    elif rand < 0.90:
+        minutes_ago = random.uniform(20, 40)
+    else:
+        minutes_ago = random.uniform(40, 60)
+
+    jitter_seconds = random.uniform(0, 30)
+    return now - timedelta(minutes=minutes_ago, seconds=jitter_seconds)
 
 # Ensure the project root is on sys.path when run directly
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -75,6 +99,7 @@ async def seed() -> None:
                 if classification.mitre_tactics else None
             )
 
+            spread_ts = get_spread_timestamp()
             te = ThreatEvent(
                 event_type=event_dict.get("event_type") or "network",
                 source=event_dict.get("source"),
@@ -97,6 +122,8 @@ async def seed() -> None:
                 cross_layer_correlated=classification.cross_layer_correlated,
                 rule_matches=classification.rule_matches,
                 mitre_techniques=classification.mitre_techniques,
+                created_at=spread_ts,
+                updated_at=spread_ts,
             )
             session.add(te)
             saved_events += 1

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, CheckCircle2, Clock, Circle, Terminal, Copy, Check, Zap, BookOpen, Loader2 } from 'lucide-react'
+import { ChevronDown, CheckCircle2, Clock, Circle, Terminal, Copy, Check, Zap, BookOpen, Loader2, RefreshCw } from 'lucide-react'
 import { SeverityBadge } from './SeverityBadge'
 import { playbooksApi } from '@/lib/api'
 import type { Playbook, Incident } from '@/types'
@@ -37,6 +37,7 @@ export function PlaybookViewer({ playbook, incident, onGeneratePlaybook }: Props
   const [generating, setGenerating] = useState(false)
   const [quickResponse, setQuickResponse] = useState<string[]>([])
   const [showQuickModal, setShowQuickModal] = useState(false)
+  const [loadingQuick, setLoadingQuick] = useState(false)
 
   const handleGenerate = async () => {
     if (!incident?.id) return
@@ -105,7 +106,21 @@ export function PlaybookViewer({ playbook, incident, onGeneratePlaybook }: Props
           </button>
         )}
         <button
-          onClick={() => setShowQuickModal(true)}
+          onClick={async () => {
+            setShowQuickModal(true)
+            if (quickResponse.length === 0) {
+              setLoadingQuick(true)
+              try {
+                const threatType = (incident as any)?.threat_type || playbook?.name?.toLowerCase().replace(/\s+/g, '_') || 'general'
+                const result = await playbooksApi.getQuickResponse(threatType)
+                setQuickResponse(result.commands || [])
+              } catch {
+                // keep empty — modal shows "no commands" message
+              } finally {
+                setLoadingQuick(false)
+              }
+            }
+          }}
           className="flex-1 flex items-center justify-center gap-1.5 text-xs py-1.5 rounded-lg font-semibold transition-all"
           style={{ background: 'rgba(255,184,0,0.12)', color: '#ffb800', border: '1px solid rgba(255,184,0,0.25)' }}
         >
@@ -242,27 +257,32 @@ export function PlaybookViewer({ playbook, incident, onGeneratePlaybook }: Props
               <h3 className="text-sm font-bold mb-3" style={{ color: '#ffb800' }}>
                 ⚡ Quick Response Commands
               </h3>
-              <div className="space-y-2">
-                {[
-                  'netstat -an | grep ESTABLISHED',
-                  'ps aux | grep -v grep | grep suspicious',
-                  'last -n 20 | grep -v "still logged in"',
-                  'find /tmp -newer /etc/passwd -type f',
-                  'grep "Failed password" /var/log/auth.log | tail -20',
-                ].map((cmd, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-2 px-3 py-2 rounded"
-                    style={{ background: '#050810', border: '1px solid #1e2d4a' }}
-                  >
-                    <Terminal className="w-3 h-3 flex-shrink-0" style={{ color: '#00d4ff' }} />
-                    <code className="flex-1 text-[10px]" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#00ff9d' }}>
-                      {cmd}
-                    </code>
-                    <CopyButton text={cmd} />
-                  </div>
-                ))}
-              </div>
+              {loadingQuick ? (
+                <div className="flex items-center justify-center py-6" style={{ color: '#6b7a99' }}>
+                  <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                  <span className="text-xs">Loading commands…</span>
+                </div>
+              ) : quickResponse.length === 0 ? (
+                <p className="text-xs text-center py-4" style={{ color: '#6b7a99' }}>
+                  No commands available for this threat type.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {quickResponse.map((cmd, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-2 px-3 py-2 rounded"
+                      style={{ background: '#050810', border: '1px solid #1e2d4a' }}
+                    >
+                      <Terminal className="w-3 h-3 flex-shrink-0" style={{ color: '#00d4ff' }} />
+                      <code className="flex-1 text-[10px]" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#00ff9d' }}>
+                        {cmd}
+                      </code>
+                      <CopyButton text={cmd} />
+                    </div>
+                  ))}
+                </div>
+              )}
               <button
                 onClick={() => setShowQuickModal(false)}
                 className="mt-4 w-full text-xs py-2 rounded-lg font-semibold"

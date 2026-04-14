@@ -139,12 +139,107 @@ export interface IncidentWithClassification extends Incident {
   anomaly_score: number
 }
 
+// ── Analyst & Ticket types ────────────────────────────────────────────────────
+
+export interface Analyst {
+  id: string
+  name: string
+  email: string
+  tier: number
+  skills: string[]
+  availability: 'online' | 'busy' | 'offline'
+  max_tickets: number
+  current_ticket_count: number
+  avg_resolution_hours: number
+  total_resolved: number
+  success_rate: number
+  workload_percentage: number
+  is_active: boolean
+  created_at: string
+}
+
+export interface TicketActivity {
+  id: string
+  ticket_id: string
+  actor_type: 'agent' | 'analyst' | 'system'
+  actor_id: string
+  actor_name: string
+  action: string
+  old_value?: string
+  new_value?: string
+  comment?: string
+  created_at: string
+}
+
+export interface Ticket {
+  id: string
+  ticket_number: number
+  title: string
+  description: string
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
+  status: string
+  ticket_type: string
+  assigned_to?: string
+  assigned_analyst_name?: string
+  sla_deadline: string
+  sla_breached: boolean
+  sla_hours_remaining: number
+  escalation_count: number
+  agent_attempts: number
+  agent_confidence?: number
+  source_type: string
+  created_at: string
+  updated_at: string
+  activities: TicketActivity[]
+}
+
+export interface TicketStats {
+  total: number
+  open: number
+  acknowledged: number
+  in_progress: number
+  resolved: number
+  closed: number
+  sla_breached: number
+  by_severity: {
+    CRITICAL: number
+    HIGH: number
+    MEDIUM: number
+    LOW: number
+  }
+  by_type: Record<string, number>
+}
+
+export interface LeaderboardEntry {
+  rank: number
+  analyst: Analyst
+  tickets_this_week: number
+  avg_resolution_hours_this_week: number
+  sla_compliance_rate: number
+}
+
+export interface Project {
+  id: string
+  name: string
+  description: string
+  target_url?: string
+  risk_tier: string
+  status: string
+  owner_name: string
+  open_tickets: number
+  critical_tickets: number
+  resolved_tickets: number
+  security_score: number
+  created_at: string
+}
+
 // ── WebSocket event types ─────────────────────────────────────────────────────
 
 export type WsEventType =
   | 'new_incident'
   | 'incident_updated'
   | 'new_alert'
+  | 'new_threat'
   | 'threat_detected'
   | 'live_event'
   | 'simulation_started'
@@ -152,7 +247,13 @@ export type WsEventType =
   | 'simulation_failed'
   | 'sim_event'
   | 'sim_alert'
+  | 'demo_progress'
   | 'ack'
+  | 'ticket_created'
+  | 'ticket_assigned'
+  | 'sla_breach'
+  | 'ticket_resolved'
+  | 'analyst_update'
 
 export interface WsMessage<T = unknown> {
   type: WsEventType

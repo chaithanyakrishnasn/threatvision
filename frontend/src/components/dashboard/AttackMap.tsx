@@ -35,7 +35,6 @@ function getLocation(ip: string) {
   for (const [prefix, loc] of Object.entries(IP_LOCATIONS)) {
     if (ip.startsWith(prefix)) return loc
   }
-  // Random position on map for unknown IPs
   return { x: 300 + Math.random() * 200, y: 130 + Math.random() * 80, label: 'Unknown' }
 }
 
@@ -74,148 +73,128 @@ export function AttackMap({ alerts }: Props) {
         })
       }
     })
-
-    // Always show some demo sources if empty
-    if (unique.size === 0) {
-      const demos = [
-        { ip: '185.220.101.5',  sev: 'critical', label: 'Russia' },
-        { ip: '91.108.4.22',    sev: 'high',     label: 'Netherlands' },
-        { ip: '45.95.147.236',  sev: 'high',     label: 'Europe' },
-        { ip: '194.165.16.11',  sev: 'medium',   label: 'Iran' },
-      ]
-      demos.forEach((d, i) => {
-        const loc = getLocation(d.ip)
-        unique.set(d.ip, {
-          id: `demo-${i}`,
-          ip: d.ip,
-          x: loc.x + (Math.random() - 0.5) * 15,
-          y: loc.y + (Math.random() - 0.5) * 15,
-          label: d.label,
-          severity: d.sev,
-          timestamp: Date.now() - i * 10000,
-        })
-      })
-    }
-
     setSources(Array.from(unique.values()))
   }, [alerts])
 
   const getColor = (sev: string) => {
     if (sev === 'critical') return '#ff3b6b'
-    if (sev === 'high') return '#ff6b35'
-    if (sev === 'medium') return '#ffb800'
+    if (sev === 'high')     return '#ff6b35'
+    if (sev === 'medium')   return '#ffb800'
     return '#00d4ff'
   }
 
   return (
-    <div
-      className="relative w-full rounded-lg overflow-hidden"
-      style={{ height: 220, background: '#0a0e1a', border: '1px solid #1e2d4a' }}
-    >
-      {/* Scanline overlay */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,212,255,0.015) 3px, rgba(0,212,255,0.015) 4px)',
-        }}
-      />
-
-      <svg className="w-full h-full" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid meet">
-        {/* Grid */}
-        {Array.from({ length: 17 }, (_, i) => (
-          <line key={`v${i}`} x1={i * 50} y1={0} x2={i * 50} y2={400} stroke="#1e2d4a" strokeWidth={0.5} />
-        ))}
-        {Array.from({ length: 9 }, (_, i) => (
-          <line key={`h${i}`} x1={0} y1={i * 50} x2={800} y2={i * 50} stroke="#1e2d4a" strokeWidth={0.5} />
-        ))}
-
-        {/* Continent outlines */}
-        <g opacity={0.15}>
-          {CONTINENTS.trim().split('\n').map((path, i) => (
-            <path key={i} d={path.trim()} fill="#00d4ff" stroke="#00d4ff" strokeWidth={0.5} />
-          ))}
-        </g>
-
-        {/* Attack arcs and dots */}
-        {sources.map((src, i) => {
-          const color = getColor(src.severity)
-          const dur = `${1.8 + (i % 4) * 0.5}s`
-          // Curved arc path
-          const midX = (src.x + TARGET.x) / 2
-          const midY = Math.min(src.y, TARGET.y) - 40 - i * 5
-          const pathD = `M${src.x},${src.y} Q${midX},${midY} ${TARGET.x},${TARGET.y}`
-
-          return (
-            <g key={src.id}>
-              {/* Static arc */}
-              <path
-                d={pathD}
-                fill="none"
-                stroke={color}
-                strokeWidth={0.8}
-                strokeOpacity={0.25}
-                strokeDasharray="6 4"
-              />
-              {/* Animated particle */}
-              <circle r={2.5} fill={color} opacity={0.9}>
-                <animateMotion dur={dur} repeatCount="indefinite" path={pathD} />
-                <animate attributeName="opacity" values="0;1;1;0" dur={dur} repeatCount="indefinite" />
-              </circle>
-
-              {/* Source dot with pulse */}
-              <circle cx={src.x} cy={src.y} r={6} fill={color} opacity={0.15}>
-                <animate attributeName="r" values="5;12;5" dur="2.5s" repeatCount="indefinite" />
-                <animate attributeName="opacity" values="0.15;0;0.15" dur="2.5s" repeatCount="indefinite" />
-              </circle>
-              <circle cx={src.x} cy={src.y} r={4} fill={color} opacity={0.9} />
-
-              {/* Label */}
-              <text
-                x={src.x + 7}
-                y={src.y + 4}
-                fill={color}
-                fontSize={8}
-                opacity={0.85}
-                fontFamily="JetBrains Mono, monospace"
-              >
-                {src.label}
-              </text>
-            </g>
-          )
-        })}
-
-        {/* Target — Your Network */}
-        <circle cx={TARGET.x} cy={TARGET.y} r={16} fill="none" stroke="#00d4ff" strokeWidth={1} opacity={0.3}>
-          <animate attributeName="r" values="14;22;14" dur="2s" repeatCount="indefinite" />
-          <animate attributeName="opacity" values="0.3;0.05;0.3" dur="2s" repeatCount="indefinite" />
-        </circle>
-        <circle cx={TARGET.x} cy={TARGET.y} r={8} fill="none" stroke="#00d4ff" strokeWidth={1.5} opacity={0.6} />
-        <circle cx={TARGET.x} cy={TARGET.y} r={3} fill="#00d4ff" />
-        <text x={TARGET.x + 12} y={TARGET.y + 4} fill="#00d4ff" fontSize={9} fontWeight="bold" fontFamily="Inter, sans-serif">
-          YOUR NETWORK
-        </text>
-      </svg>
-
-      {/* Legend */}
-      <div className="absolute bottom-2 left-3 flex items-center gap-3">
-        {[
-          { color: '#ff3b6b', label: 'Critical' },
-          { color: '#ff6b35', label: 'High' },
-          { color: '#ffb800', label: 'Medium' },
-        ].map((l) => (
-          <div key={l.label} className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full" style={{ background: l.color }} />
-            <span className="text-[9px]" style={{ color: '#6b7a99' }}>{l.label}</span>
-          </div>
-        ))}
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+      background: '#0f1629',
+      border: '1px solid #1e2d4a',
+      borderRadius: '8px',
+    }}>
+      {/* Header */}
+      <div style={{
+        flexShrink: 0,
+        padding: '7px 12px',
+        borderBottom: '1px solid #1e2d4a',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <span style={{
+          color: '#6b7a99', fontSize: '11px', fontWeight: 600,
+          textTransform: 'uppercase', letterSpacing: '0.07em',
+        }}>
+          Live Attack Map
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{
+            width: 7, height: 7, borderRadius: '50%',
+            background: '#ff3b6b', display: 'inline-block',
+          }} />
+          <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#ff3b6b' }}>
+            {sources.length} active
+          </span>
+        </div>
       </div>
 
-      {/* Active count */}
-      <div className="absolute top-2 right-3 flex items-center gap-1.5">
-        <span className="w-2 h-2 rounded-full live-dot" style={{ background: '#ff3b6b' }} />
-        <span className="font-mono text-[10px]" style={{ color: '#ff3b6b' }}>
-          {sources.length} active sources
-        </span>
+      {/* Map area */}
+      <div style={{ flex: 1, minHeight: 0, position: 'relative', background: '#0a0e1a' }}>
+        {/* Scanline overlay */}
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none',
+          backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,212,255,0.015) 3px, rgba(0,212,255,0.015) 4px)',
+        }} />
+
+        <svg width="100%" height="100%" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid meet">
+          {/* Grid */}
+          {Array.from({ length: 17 }, (_, i) => (
+            <line key={`v${i}`} x1={i * 50} y1={0} x2={i * 50} y2={400} stroke="#1e2d4a" strokeWidth={0.5} />
+          ))}
+          {Array.from({ length: 9 }, (_, i) => (
+            <line key={`h${i}`} x1={0} y1={i * 50} x2={800} y2={i * 50} stroke="#1e2d4a" strokeWidth={0.5} />
+          ))}
+
+          {/* Continent outlines */}
+          <g opacity={0.15}>
+            {CONTINENTS.trim().split('\n').map((path, i) => (
+              <path key={i} d={path.trim()} fill="#00d4ff" stroke="#00d4ff" strokeWidth={0.5} />
+            ))}
+          </g>
+
+          {/* Attack arcs and dots */}
+          {sources.map((src, i) => {
+            const color = getColor(src.severity)
+            const dur = `${1.8 + (i % 4) * 0.5}s`
+            const midX = (src.x + TARGET.x) / 2
+            const midY = Math.min(src.y, TARGET.y) - 40 - i * 5
+            const pathD = `M${src.x},${src.y} Q${midX},${midY} ${TARGET.x},${TARGET.y}`
+
+            return (
+              <g key={src.id}>
+                <path d={pathD} fill="none" stroke={color} strokeWidth={0.8} strokeOpacity={0.25} strokeDasharray="6 4" />
+                <circle r={2.5} fill={color} opacity={0.9}>
+                  <animateMotion dur={dur} repeatCount="indefinite" path={pathD} />
+                  <animate attributeName="opacity" values="0;1;1;0" dur={dur} repeatCount="indefinite" />
+                </circle>
+                <circle cx={src.x} cy={src.y} r={6} fill={color} opacity={0.15}>
+                  <animate attributeName="r" values="5;12;5" dur="2.5s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.15;0;0.15" dur="2.5s" repeatCount="indefinite" />
+                </circle>
+                <circle cx={src.x} cy={src.y} r={4} fill={color} opacity={0.9} />
+                <text x={src.x + 7} y={src.y + 4} fill={color} fontSize={8} opacity={0.85} fontFamily="JetBrains Mono, monospace">
+                  {src.label}
+                </text>
+              </g>
+            )
+          })}
+
+          {/* Target */}
+          <circle cx={TARGET.x} cy={TARGET.y} r={16} fill="none" stroke="#00d4ff" strokeWidth={1} opacity={0.3}>
+            <animate attributeName="r" values="14;22;14" dur="2s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.3;0.05;0.3" dur="2s" repeatCount="indefinite" />
+          </circle>
+          <circle cx={TARGET.x} cy={TARGET.y} r={8} fill="none" stroke="#00d4ff" strokeWidth={1.5} opacity={0.6} />
+          <circle cx={TARGET.x} cy={TARGET.y} r={3} fill="#00d4ff" />
+          <text x={TARGET.x + 12} y={TARGET.y + 4} fill="#00d4ff" fontSize={9} fontWeight="bold" fontFamily="Inter, sans-serif">
+            YOUR NETWORK
+          </text>
+        </svg>
+
+        {/* Legend */}
+        <div style={{ position: 'absolute', bottom: 6, left: 10, display: 'flex', gap: 10 }}>
+          {[
+            { color: '#ff3b6b', label: 'Critical' },
+            { color: '#ff6b35', label: 'High' },
+            { color: '#ffb800', label: 'Medium' },
+          ].map((l) => (
+            <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: l.color, display: 'inline-block' }} />
+              <span style={{ fontSize: 9, color: '#6b7a99' }}>{l.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )

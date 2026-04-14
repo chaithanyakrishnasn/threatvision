@@ -388,6 +388,34 @@ async def _persist_classification(event: dict, classification) -> None:
                     "timestamp": incident.created_at.isoformat(),
                 })
 
+                # ── Phase 5: Auto-create ticket for high-confidence CRITICAL/HIGH threats
+                sev_upper = classification.severity.upper()
+                if (
+                    classification.confidence > 0.85
+                    and sev_upper in ("HIGH", "CRITICAL")
+                    and not classification.is_false_positive
+                ):
+                    try:
+                        from app.services.ticket_service import ticket_service
+                        async with async_session_factory() as ticket_session:
+                            ticket = await ticket_service.create_ticket_from_incident(
+                                ticket_session,
+                                str(incident.id),
+                                agent_confidence=classification.confidence,
+                                agent_notes=classification.explanation or "",
+                            )
+                            await ticket_session.commit()
+                            if ticket:
+                                logger.info(
+                                    "auto_ticket_created",
+                                    ticket_id=str(ticket.id),
+                                    incident_id=str(incident.id),
+                                    severity=sev_upper,
+                                    confidence=classification.confidence,
+                                )
+                    except Exception as ticket_exc:
+                        logger.error("auto_ticket_error", error=str(ticket_exc))
+
         except Exception as exc:
             await session.rollback()
             logger.error("db_persist_error", error=str(exc))

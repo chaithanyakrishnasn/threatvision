@@ -52,7 +52,31 @@
       "Bash(git config:*)",
       "Bash(git add:*)",
       "Bash(grep -E \"^\\\\S+ \\\\.env$\")",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(PYTHONPATH=/home/krishna/threatvision/backend python3 app/migrations/add_phase5_tables.py)",
+      "Bash(PYTHONPATH=/home/krishna/threatvision/backend python3:*)",
+      "Bash(curl -s http://localhost:8000/api/v1/analysts/)",
+      "Bash(curl -sv http://localhost:8000/api/v1/analysts/)",
+      "Bash(curl -sL http://localhost:8000/api/v1/analysts)",
+      "Bash(curl -sL http://localhost:8000/api/v1/tickets)",
+      "Bash(curl -sL http://localhost:8000/api/v1/tickets/stats)",
+      "Bash(npm run:*)",
+      "Bash(curl -s http://localhost:8000/api/v1/dashboard/metrics)",
+      "Bash(curl -s \"http://localhost:8000/api/v1/incidents?limit=5\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/dashboard/metrics\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/dashboard/threat-timeline?minutes=60\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/threats/recent?limit=5\")",
+      "Bash(curl -s http://localhost:8000/api/v1/analysts)",
+      "Bash(curl -s \"http://localhost:8000/api/v1/tickets/stats\")",
+      "Bash(curl -s http://localhost:8000/api/v1/analysts/leaderboard)",
+      "Bash(curl -s http://localhost:8000/api/v1/tickets/sla-breaches)",
+      "Bash(python -m app.migrations.add_phase5_tables)",
+      "Bash(python -m app.data.seed_analysts)",
+      "Bash(curl -s http://localhost:8000/api/v1/tickets/stats)",
+      "Bash(echo \"Frontend starting in background \\(PID $!\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/analysts)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/tickets)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/dashboard)"
     ]
   }
 }

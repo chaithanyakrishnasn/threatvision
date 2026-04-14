@@ -6,6 +6,10 @@ import type {
   SimulationRun,
   DashboardMetrics,
   Playbook,
+  Analyst,
+  Ticket,
+  TicketStats,
+  LeaderboardEntry,
 } from '@/types'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -89,6 +93,9 @@ export const playbooksApi = {
       affected_ips: affectedIps,
     }).then((r) => r.data),
 
+  getQuickResponse: (threatType: string) =>
+    apiClient.get<{ commands: string[]; threat_type: string }>(`/playbooks/quick/${threatType}`).then((r) => r.data),
+
   explain: (event: Record<string, unknown>, classification: Record<string, unknown>) =>
     apiClient.post<{
       what_happened: string
@@ -103,6 +110,43 @@ export const playbooksApi = {
     apiClient.post(`/playbooks/${playbookId}/execute`, null, {
       params: { incident_id: incidentId, auto_execute: autoExecute },
     }).then((r) => r.data),
+}
+
+// ── Ingestion ─────────────────────────────────────────────────────────────────
+export const ingestionApi = {
+  triggerDemo: () =>
+    apiClient.post<{ status: string; message: string }>('/ingestion/demo').then((r) => r.data),
+
+  getStats: () =>
+    apiClient.get<{ running: boolean; eps: number; queue_depth: number; total_processed: number }>('/ingestion/stats').then((r) => r.data),
+}
+
+// ── Dashboard extras ──────────────────────────────────────────────────────────
+export const dashboardExtApi = {
+  getThreatTimeline: (minutes = 60) =>
+    apiClient.get<Array<{
+      timestamp: string
+      minute: number
+      brute_force: number
+      c2_beacon: number
+      lateral_movement: number
+      false_positive: number
+      benign: number
+      total: number
+    }>>(`/dashboard/threat-timeline?minutes=${minutes}`).then((r) => r.data),
+}
+
+// ── Recent live events ────────────────────────────────────────────────────────
+export const liveEventsApi = {
+  getRecent: (limit = 20) =>
+    apiClient.get<Array<{
+      id: string
+      threat_type: string
+      severity: string
+      source_ip: string | null
+      confidence: number
+      created_at: string
+    }>>(`/threats/recent?limit=${limit}`).then((r) => r.data),
 }
 
 // ── Simulation (extended) ─────────────────────────────────────────────────────
@@ -135,4 +179,110 @@ export const simulationApi = {
     apiClient.post<{ simulation_id: string; status: string; message: string }>(
       '/simulation/start', payload
     ).then((r) => r.data),
+}
+
+// ── Analysts ──────────────────────────────────────────────────────────────────
+export const analystsApi = {
+  async list(): Promise<Analyst[]> {
+    const res = await fetch(`${BASE_URL}/api/v1/analysts/`)
+    if (!res.ok) throw new Error('Failed to fetch analysts')
+    return res.json()
+  },
+  async getAvailable(): Promise<Analyst[]> {
+    const res = await fetch(`${BASE_URL}/api/v1/analysts/available`)
+    if (!res.ok) throw new Error('Failed to fetch available analysts')
+    return res.json()
+  },
+  async getLeaderboard(): Promise<LeaderboardEntry[]> {
+    const res = await fetch(`${BASE_URL}/api/v1/analysts/leaderboard`)
+    if (!res.ok) throw new Error('Failed to fetch leaderboard')
+    return res.json()
+  },
+  async getTickets(id: string): Promise<Ticket[]> {
+    const res = await fetch(`${BASE_URL}/api/v1/analysts/${id}/tickets`)
+    if (!res.ok) throw new Error('Failed to fetch analyst tickets')
+    return res.json()
+  },
+  async updateAvailability(id: string, availability: string): Promise<Analyst> {
+    const res = await fetch(`${BASE_URL}/api/v1/analysts/${id}/availability`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ availability }),
+    })
+    if (!res.ok) throw new Error('Failed to update availability')
+    return res.json()
+  },
+}
+
+// ── Tickets ───────────────────────────────────────────────────────────────────
+export const ticketsApi = {
+  async list(filters?: { status?: string; severity?: string; sla_breached?: boolean }): Promise<Ticket[]> {
+    const params = new URLSearchParams()
+    if (filters?.status) params.append('status', filters.status)
+    if (filters?.severity) params.append('severity', filters.severity)
+    if (filters?.sla_breached) params.append('sla_breached', 'true')
+    const res = await fetch(`${BASE_URL}/api/v1/tickets/?${params}`)
+    if (!res.ok) throw new Error('Failed to fetch tickets')
+    return res.json()
+  },
+  async get(id: string): Promise<Ticket> {
+    const res = await fetch(`${BASE_URL}/api/v1/tickets/${id}`)
+    if (!res.ok) throw new Error('Failed to fetch ticket')
+    return res.json()
+  },
+  async getStats(): Promise<TicketStats> {
+    const res = await fetch(`${BASE_URL}/api/v1/tickets/stats`)
+    if (!res.ok) throw new Error('Failed to fetch ticket stats')
+    return res.json()
+  },
+  async getSLABreaches(): Promise<Ticket[]> {
+    const res = await fetch(`${BASE_URL}/api/v1/tickets/sla-breaches`)
+    if (!res.ok) throw new Error('Failed to fetch SLA breaches')
+    return res.json()
+  },
+  async assign(ticketId: string, analystId: string): Promise<Ticket> {
+    const res = await fetch(`${BASE_URL}/api/v1/tickets/${ticketId}/assign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ analyst_id: analystId }),
+    })
+    if (!res.ok) throw new Error('Failed to assign ticket')
+    return res.json()
+  },
+  async acknowledge(ticketId: string, analystId: string): Promise<Ticket> {
+    const res = await fetch(`${BASE_URL}/api/v1/tickets/${ticketId}/acknowledge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ analyst_id: analystId }),
+    })
+    if (!res.ok) throw new Error('Failed to acknowledge ticket')
+    return res.json()
+  },
+  async resolve(ticketId: string, analystId: string, notes: string, type: string): Promise<Ticket> {
+    const res = await fetch(`${BASE_URL}/api/v1/tickets/${ticketId}/resolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ analyst_id: analystId, resolution_notes: notes, resolution_type: type }),
+    })
+    if (!res.ok) throw new Error('Failed to resolve ticket')
+    return res.json()
+  },
+  async escalate(ticketId: string, reason: string): Promise<Ticket> {
+    const res = await fetch(`${BASE_URL}/api/v1/tickets/${ticketId}/escalate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    })
+    if (!res.ok) throw new Error('Failed to escalate ticket')
+    return res.json()
+  },
+  async comment(ticketId: string, actorName: string, comment: string): Promise<{ success: boolean }> {
+    const res = await fetch(`${BASE_URL}/api/v1/tickets/${ticketId}/comment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actor_name: actorName, actor_type: 'analyst', comment }),
+    })
+    if (!res.ok) throw new Error('Failed to add comment')
+    return res.json()
+  },
 }

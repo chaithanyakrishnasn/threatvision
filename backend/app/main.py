@@ -61,6 +61,11 @@ async def lifespan(app: FastAPI):
     await pipeline.start()
     logger.info("ingestion_pipeline_started")
 
+    # Start SLA monitor (Phase 5)
+    from app.services.sla_monitor import sla_monitor
+    await sla_monitor.start()
+    logger.info("sla_monitor_started")
+
     _streamer_task = asyncio.create_task(_live_event_streamer())
     logger.info("live_streamer_started")
 
@@ -73,6 +78,9 @@ async def lifespan(app: FastAPI):
             await _streamer_task
         except asyncio.CancelledError:
             pass
+
+    from app.services.sla_monitor import sla_monitor
+    await sla_monitor.stop()
 
     await pipeline.stop()
     logger.info("threatvision_shutdown")
@@ -95,6 +103,9 @@ app = FastAPI(
         {"name": "ingestion",   "description": "Redis-backed event ingestion pipeline"},
         {"name": "dashboard",   "description": "SOC dashboard metrics & health"},
         {"name": "alerts",      "description": "Rule-triggered alert management"},
+        {"name": "analysts",    "description": "Analyst management — CRUD, workload, leaderboard"},
+        {"name": "tickets",     "description": "Ticket engine — lifecycle, SLA, escalation, activities"},
+        {"name": "projects",    "description": "Project management — security score, analyst assignment"},
     ],
 )
 

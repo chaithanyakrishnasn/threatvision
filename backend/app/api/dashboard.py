@@ -200,6 +200,59 @@ async def get_dashboard_metrics(db: AsyncSession = Depends(get_db)):
     }
 
 
+@router.get("/threat-timeline")
+async def get_threat_timeline(
+    minutes: int = 60,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Returns event counts bucketed per minute for the last N minutes,
+    broken down by threat type. Always returns exactly N buckets (index 0 =
+    oldest, index N-1 = most recent). Used by the ThreatTimeline chart.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+
+    result = await db.execute(
+        select(ThreatEvent)
+        .where(ThreatEvent.created_at >= cutoff)
+        .order_by(ThreatEvent.created_at)
+    )
+    events = result.scalars().all()
+
+    # Build N buckets indexed 0 (oldest) … N-1 (newest)
+    now = datetime.now(timezone.utc)
+    buckets: dict[int, dict] = {}
+    for i in range(minutes):
+        bucket_time = now - timedelta(minutes=minutes - i)
+        buckets[i] = {
+            "timestamp": bucket_time.isoformat(),
+            "minute": i,
+            "brute_force": 0,
+            "c2_beacon": 0,
+            "lateral_movement": 0,
+            "false_positive": 0,
+            "benign": 0,
+            "total": 0,
+        }
+
+    known_types = {"brute_force", "c2_beacon", "lateral_movement", "false_positive", "benign"}
+
+    for event in events:
+        event_time = event.created_at
+        if event_time.tzinfo is None:
+            event_time = event_time.replace(tzinfo=timezone.utc)
+        minutes_ago = int((now - event_time).total_seconds() / 60)
+        bucket_index = minutes - minutes_ago - 1
+        if 0 <= bucket_index < minutes:
+            threat_type = (event.threat_type or "benign").lower()
+            if threat_type not in known_types:
+                threat_type = "brute_force"
+            buckets[bucket_index][threat_type] += 1
+            buckets[bucket_index]["total"] += 1
+
+    return list(buckets.values())
+
+
 @router.get("/health-check")
 async def backend_health(db: AsyncSession = Depends(get_db)):
     try:

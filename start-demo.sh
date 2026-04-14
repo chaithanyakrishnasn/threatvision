@@ -2,22 +2,22 @@
 set -e
 cd /home/krishna/threatvision
 
-echo "🛡️  Starting ThreatVision..."
+echo "  Starting ThreatVision..."
 echo ""
 
 # Use docker compose v2 (docker-compose v1 has a ContainerConfig bug with newer images)
 DC="docker compose"
 
 # Start infrastructure
-echo "📦 Starting Docker services..."
+echo " Starting Docker services..."
 $DC up -d postgres redis chromadb
 echo ""
 
 # Wait for Postgres with TCP check
-echo "⏳ Waiting for Postgres on port 5432..."
+echo " Waiting for Postgres on port 5432..."
 for i in $(seq 1 30); do
     if python3 -c "import socket; s=socket.socket(); s.settimeout(1); s.connect(('127.0.0.1',5432)); s.close()" 2>/dev/null; then
-        echo "✅ Postgres is ready"
+        echo " Postgres is ready"
         break
     fi
     echo "   attempt $i/30..."
@@ -25,10 +25,10 @@ for i in $(seq 1 30); do
 done
 
 # Wait for Redis with TCP check
-echo "⏳ Waiting for Redis on port 6379..."
+echo " Waiting for Redis on port 6379..."
 for i in $(seq 1 15); do
     if python3 -c "import socket; s=socket.socket(); s.settimeout(1); s.connect(('127.0.0.1',6379)); s.close()" 2>/dev/null; then
-        echo "✅ Redis is ready"
+        echo " Redis is ready"
         break
     fi
     sleep 2
@@ -37,29 +37,29 @@ done
 echo ""
 
 # Seed database
-echo "🌱 Seeding demo data..."
+echo " Seeding demo data..."
 cd /home/krishna/threatvision/backend
 python3 -m app.data.seed_db
-echo "✅ Demo data seeded"
+echo " Demo data seeded"
 echo ""
 
 # Start backend
-echo "🚀 Starting backend API..."
+echo " Starting backend API..."
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level warning &
 BACKEND_PID=$!
-sleep 4
+sleep 8
 
 # Verify backend started
 if curl -s http://localhost:8000/health > /dev/null 2>&1; then
-    echo "✅ Backend running at http://localhost:8000"
+    echo " Backend running at http://localhost:8000"
 else
-    echo "❌ Backend failed to start - check logs"
+    echo " Backend failed to start - check logs"
     exit 1
 fi
 echo ""
 
 # Start frontend
-echo "🎨 Starting frontend..."
+echo " Starting frontend..."
 cd /home/krishna/threatvision/frontend
 npm run dev > /tmp/frontend.log 2>&1 &
 FRONTEND_PID=$!
@@ -67,14 +67,14 @@ sleep 6
 
 # Verify frontend started
 if curl -s http://localhost:3000 > /dev/null 2>&1; then
-    echo "✅ Frontend running at http://localhost:3000"
+    echo " Frontend running at http://localhost:3000"
 else
-    echo "⚠️  Frontend still starting (check /tmp/frontend.log)"
+    echo "  Frontend still starting (check /tmp/frontend.log)"
 fi
 
 echo ""
 echo "════════════════════════════════════════"
-echo "🚀 ThreatVision is LIVE!"
+echo " ThreatVision is LIVE!"
 echo "   Dashboard:  http://localhost:3000/dashboard"
 echo "   API:        http://localhost:8000"
 echo "   API Docs:   http://localhost:8000/docs"

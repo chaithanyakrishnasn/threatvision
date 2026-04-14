@@ -6,6 +6,9 @@ from .threats import router as threats_router
 from .playbooks import router as playbooks_router
 from .dashboard import router as dashboard_router
 from .ingestion import router as ingestion_router
+from .analysts import router as analysts_router
+from .tickets import router as tickets_router
+from .projects import router as projects_router
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(incidents_router, prefix="/incidents",  tags=["incidents"])
@@ -15,3 +18,7 @@ api_router.include_router(threats_router,   prefix="/threats",    tags=["threats
 api_router.include_router(playbooks_router, prefix="/playbooks",  tags=["playbooks"])
 api_router.include_router(dashboard_router, prefix="/dashboard",  tags=["dashboard"])
 api_router.include_router(ingestion_router, prefix="/ingestion",  tags=["ingestion"])
+# Phase 5 — Analyst System & Ticket Engine
+api_router.include_router(analysts_router,  prefix="/analysts",   tags=["analysts"])
+api_router.include_router(tickets_router,   prefix="/tickets",    tags=["tickets"])
+api_router.include_router(projects_router,  prefix="/projects",   tags=["projects"])

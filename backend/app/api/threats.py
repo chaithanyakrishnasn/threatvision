@@ -65,6 +65,39 @@ async def list_threats(
 
 # ── Detection engine endpoints — MUST be registered before /{event_id} ────────
 
+@router.get("/recent")
+async def get_recent_threats(
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the most recent non-benign threat events for the live sidebar."""
+    q = (
+        select(ThreatEvent)
+        .where(
+            ThreatEvent.threat_type.isnot(None),
+            ThreatEvent.threat_type.notin_(["benign", "false_positive"]),
+        )
+        .order_by(desc(ThreatEvent.created_at))
+        .limit(limit)
+    )
+    result = await db.execute(q)
+    events = result.scalars().all()
+    return [
+        {
+            "id": str(e.id),
+            "threat_type": e.threat_type,
+            "severity": e.severity,
+            "source_ip": e.source_ip,
+            "dest_ip": e.dest_ip,
+            "confidence": e.confidence,
+            "anomaly_score": e.anomaly_score,
+            "mitre_technique": e.mitre_technique,
+            "created_at": e.created_at.isoformat(),
+        }
+        for e in events
+    ]
+
+
 @router.post("/classify")
 async def classify_single(event: dict[str, Any]) -> dict:
     """Classify a single event dict. No DB write."""
