@@ -16,22 +16,22 @@ ThreatVision combines real-time threat detection, AI-driven incident analysis, a
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    ThreatVision                      │
-│                                                     │
+┌────────────────────────────────────────────────────┐
+│                    ThreatVision                    │
+│                                                    │
 │  ┌──────────┐   ┌──────────┐   ┌────────────────┐  │
 │  │ Frontend │   │ Backend  │   │   AI Agents    │  │
 │  │ Next.js  │◄──│ FastAPI  │──►│ Claude (via    │  │
 │  │  React   │   │ WS/REST  │   │  Anthropic)    │  │
 │  └──────────┘   └──────────┘   └────────────────┘  │
-│                      │                              │
-│         ┌────────────┼────────────┐                 │
-│         ▼            ▼            ▼                 │
+│                      │                             │
+│         ┌────────────┼────────────┐                │
+│         ▼            ▼            ▼                │
 │    ┌─────────┐ ┌──────────┐ ┌──────────┐           │
 │    │Postgres │ │  Redis   │ │ ChromaDB │           │
 │    │(events) │ │(streams) │ │(vectors) │           │
 │    └─────────┘ └──────────┘ └──────────┘           │
-└─────────────────────────────────────────────────────┘
+└────────────────────────────────────────────────────┘
 ```
 
 ## Tech Stack
@@ -56,7 +56,7 @@ ThreatVision combines real-time threat detection, AI-driven incident analysis, a
 ### 1. Clone and configure
 
 ```bash
-git clone <repo>
+git clone https://github.com/chaithanyakrishnasn/threatvision
 cd threatvision
 cp .env.example .env
 # Edit .env and add your ANTHROPIC_API_KEY
@@ -145,6 +145,3 @@ threatvision/
 | `NEXT_PUBLIC_API_URL` | Frontend → Backend HTTP URL |
 | `NEXT_PUBLIC_WS_URL` | Frontend → Backend WebSocket URL |
 
-## License
-
-MIT
