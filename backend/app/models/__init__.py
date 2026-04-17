@@ -7,8 +7,9 @@ from .analyst import Analyst
 from .ticket import Ticket
 from .ticket_activity import TicketActivity
 from .project import Project
+from .audit_log import AuditLog
 
 __all__ = [
     "Base", "Incident", "Alert", "ThreatEvent", "SimulationRun",
-    "Analyst", "Ticket", "TicketActivity", "Project",
+    "Analyst", "Ticket", "TicketActivity", "Project", "AuditLog",
 ]

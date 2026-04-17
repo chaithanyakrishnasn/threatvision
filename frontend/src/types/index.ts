@@ -21,6 +21,7 @@ export interface Incident {
   raw_events: unknown[]
   tags: string[]
   alerts: Alert[]
+  bytes_sent?: number
   created_at: string
   updated_at: string
 }
@@ -254,6 +255,7 @@ export type WsEventType =
   | 'sla_breach'
   | 'ticket_resolved'
   | 'analyst_update'
+  | 'new_audit_log'
 
 export interface WsMessage<T = unknown> {
   type: WsEventType
@@ -297,4 +299,27 @@ export interface PaginatedResponse<T> {
   total: number
   page: number
   size: number
+}
+
+// ── Audit Log types ───────────────────────────────────────────────────────────
+
+export type AuditLogActor = 'agent' | 'human' | 'system'
+export type AuditLogResult = 'success' | 'failed' | 'escalated'
+
+export interface AuditLog {
+  id: string
+  timestamp: string
+  actor_type: AuditLogActor
+  actor_id: string
+  action: string
+  target_type: string | null
+  target_id: string | null
+  result: AuditLogResult
+  reasoning: string | null
+  confidence: number | null
+  duration_ms: number | null
+  metadata: Record<string, any> | null
+  previous_hash: string
+  current_hash: string
+  created_at: string
 }

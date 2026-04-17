@@ -9,6 +9,7 @@ from .ingestion import router as ingestion_router
 from .analysts import router as analysts_router
 from .tickets import router as tickets_router
 from .projects import router as projects_router
+from .audit_logs import router as audit_logs_router
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(incidents_router, prefix="/incidents",  tags=["incidents"])
@@ -22,3 +23,5 @@ api_router.include_router(ingestion_router, prefix="/ingestion",  tags=["ingesti
 api_router.include_router(analysts_router,  prefix="/analysts",   tags=["analysts"])
 api_router.include_router(tickets_router,   prefix="/tickets",    tags=["tickets"])
 api_router.include_router(projects_router,  prefix="/projects",   tags=["projects"])
+# Phase 6 — Audit Logger & Log Intelligence
+api_router.include_router(audit_logs_router, prefix="/audit",     tags=["audit"])

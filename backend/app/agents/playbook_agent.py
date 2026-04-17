@@ -87,6 +87,24 @@ QUICK_RESPONSE: dict[str, list[str]] = {
 }
 
 
+# ── Audit helper ─────────────────────────────────────────────────────────────
+
+def _fire_playbook_audit(playbook_id: str, reasoning: str, metadata: dict) -> None:
+    """Schedule a fire-and-forget audit log entry for PlaybookAgent decisions."""
+    from app.services.audit_service import fire_and_forget, log_event
+    fire_and_forget(log_event(
+        actor_type="agent",
+        actor_id="playbook_agent",
+        action="agent_decision",
+        target_type="playbook",
+        target_id=playbook_id,
+        result="success",
+        reasoning=reasoning,
+        confidence=0.85,
+        metadata=metadata,
+    ))
+
+
 # ── Playbook Agent ─────────────────────────────────────────────────────────────
 
 class PlaybookAgent:
@@ -210,7 +228,7 @@ Respond with this exact JSON:
                         steps=steps,
                     ))
                 logger.info("playbook_agent_generated", via="claude", threat_type=threat_type)
-                return ResponsePlaybook(
+                playbook = ResponsePlaybook(
                     playbook_id=str(uuid.uuid4()),
                     incident_id=incident.incident_id,
                     threat_type=threat_type,
@@ -220,10 +238,33 @@ Respond with this exact JSON:
                     required_tools=data.get("required_tools", []),
                     success_criteria=data.get("success_criteria", []),
                 )
+                _fire_playbook_audit(
+                    playbook_id=playbook.playbook_id,
+                    reasoning=response.content,
+                    metadata={
+                        "decision_type": "playbook_generated",
+                        "threat_type": threat_type,
+                        "severity": severity,
+                        "phase_count": len(phases),
+                        "via": "claude",
+                    },
+                )
+                return playbook
         except Exception as exc:
             logger.warning("playbook_agent_claude_error", error=str(exc))
 
-        return _fallback_playbook(incident, threat_type, {})
+        pb = _fallback_playbook(incident, threat_type, {})
+        _fire_playbook_audit(
+            playbook_id=pb.playbook_id,
+            reasoning=f"Fallback playbook for {threat_type} severity={severity}",
+            metadata={
+                "decision_type": "playbook_generated",
+                "threat_type": threat_type,
+                "severity": severity,
+                "via": "fallback",
+            },
+        )
+        return pb
 
     async def generate_for_incident(
         self,

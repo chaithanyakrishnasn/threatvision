@@ -15,6 +15,7 @@ class IncidentBase(BaseModel):
     mitre_tactics: list[str] = []
     mitre_techniques: list[str] = []
     confidence: float = 0.0
+    bytes_sent: int = 0
     tags: list[str] = []
 
 

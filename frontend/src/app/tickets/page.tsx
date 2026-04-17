@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef, Suspense } from 'react'
 import { Shield, ArrowLeft, AlertTriangle, Clock, CheckCircle, XCircle, Filter, ChevronRight, X, Send, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { ticketsApi, analystsApi } from '@/lib/api'
 import { useWebSocket } from '@/lib/websocket'
 import { showToast } from '@/lib/toast'
@@ -52,6 +52,8 @@ const ACTIVITY_ICONS: Record<string, string> = {
 // ── Nav Bar ───────────────────────────────────────────────────────────────────
 
 function NavBar() {
+  const pathname = usePathname()
+
   return (
     <header
       style={{
@@ -77,8 +79,9 @@ function NavBar() {
           { href: '/dashboard', label: 'SOC Dashboard' },
           { href: '/analysts', label: 'Analysts' },
           { href: '/tickets', label: 'Tickets' },
+          { href: '/logs', label: 'Logs' },
         ].map(({ href, label }) => {
-          const active = typeof window !== 'undefined' && window.location.pathname === href
+          const active = pathname === href
           return (
             <Link key={href} href={href} style={{
               color: active ? '#00d4ff' : '#6b7a99', fontSize: 13, textDecoration: 'none',

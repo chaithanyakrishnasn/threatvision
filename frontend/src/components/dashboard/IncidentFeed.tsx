@@ -1,7 +1,7 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { Shield, ArrowRight, Link2 } from 'lucide-react'
+import { Shield, ArrowRight, Link2, UploadCloud } from 'lucide-react'
 import { SeverityBadge } from './SeverityBadge'
 import { MitreBadge } from './MitreBadge'
 import { RelativeTime } from './RelativeTime'
@@ -12,6 +12,14 @@ const SEVERITY_BORDER: Record<string, string> = {
   high:     '#ff6b35',
   medium:   '#ffb800',
   low:      '#00ff9d',
+}
+
+function formatBytes(bytes: number = 0) {
+  if (!bytes) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
 interface Props {
@@ -85,6 +93,7 @@ export function IncidentFeed({ incidents, onSelect }: Props) {
               const sev = (incident.severity || 'low').toLowerCase()
               const borderColor = SEVERITY_BORDER[sev] || '#1e2d4a'
               const isCritical = sev === 'critical'
+              const isExfil = (incident as any).threat_type === 'data_exfiltration'
 
               return (
                 <motion.div
@@ -108,11 +117,30 @@ export function IncidentFeed({ incidents, onSelect }: Props) {
                     transition: 'background 0.15s, border-color 0.15s',
                   }}
                   whileHover={{ background: 'rgba(0,212,255,0.06)' } as any}
-                  className={isCritical ? 'glow-critical' : ''}
+                  className={`${isCritical ? 'glow-critical' : ''} ${isExfil ? 'glow-exfil' : ''}`}
                 >
                   {/* Header row */}
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-                    <SeverityBadge severity={sev} pulse={isCritical} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <SeverityBadge severity={sev} pulse={isCritical || isExfil} />
+                      {isExfil && (
+                        <span style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          background: 'rgba(255, 59, 107, 0.15)',
+                          color: '#ff3b6b',
+                          border: '1px solid rgba(255, 59, 107, 0.3)',
+                        }}>
+                          <UploadCloud style={{ width: 12, height: 12 }} />
+                          EXFIL
+                        </span>
+                      )}
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                       {(incident as any).cross_layer_correlated && (
                         <span title="Cross-layer correlated">
@@ -139,7 +167,7 @@ export function IncidentFeed({ incidents, onSelect }: Props) {
                   <p style={{
                     fontSize: '13px',
                     fontWeight: 600,
-                    color: '#e8eaf0',
+                    color: isExfil ? '#ff3b6b' : '#e8eaf0',
                     marginBottom: 6,
                     lineHeight: 1.35,
                     display: '-webkit-box',
@@ -147,7 +175,7 @@ export function IncidentFeed({ incidents, onSelect }: Props) {
                     WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
                   }}>
-                    {incident.title || 'Untitled Incident'}
+                    {isExfil ? 'Data Exfiltration Detected' : (incident.title || 'Untitled Incident')}
                   </p>
 
                   {/* IP row */}
@@ -160,6 +188,20 @@ export function IncidentFeed({ incidents, onSelect }: Props) {
                       <span style={{ fontFamily: 'monospace', fontSize: '10px', color: '#6b7a99' }}>
                         {incident.dest_ip || '—'}
                       </span>
+                      {isExfil && incident.bytes_sent && (
+                        <span style={{
+                          marginLeft: 'auto',
+                          fontFamily: 'monospace',
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          color: '#ff3b6b',
+                          background: 'rgba(255,59,107,0.1)',
+                          padding: '1px 5px',
+                          borderRadius: '3px'
+                        }}>
+                          {formatBytes(incident.bytes_sent)}
+                        </span>
+                      )}
                     </div>
                   )}
 

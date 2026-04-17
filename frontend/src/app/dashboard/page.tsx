@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Shield } from 'lucide-react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { showToast } from '@/lib/toast'
 import type { Ticket } from '@/types'
 import {
@@ -15,6 +16,7 @@ import { dashboardApi, incidentsApi, alertsApi, liveEventsApi, ingestionApi } fr
 import type { Incident, Alert } from '@/types'
 
 export default function DashboardPage() {
+  const pathname = usePathname()
   const {
     incidents, alerts, metrics,
     setIncidents, setAlerts, setMetrics,
@@ -82,6 +84,9 @@ export default function DashboardPage() {
         if (events.length > 0) {
           setLiveEvents(events.map((e) => ({
             sev: (e.severity || 'medium').toUpperCase(),
+            threat_type: e.threat_type,
+            dest_ip: e.dest_ip,
+            bytes_sent: (e.raw_log as any)?.bytes_sent,
             msg: `${e.threat_type?.replace(/_/g, ' ')} from ${e.source_ip || 'unknown'}`,
             ts: new Date(e.created_at).getTime(),
           })))
@@ -115,16 +120,30 @@ export default function DashboardPage() {
   useWebSocket('live_event', useCallback((data: unknown) => {
     const d = data as any
     const sev = (d?.classification?.severity || 'medium').toUpperCase()
-    const msg = `${(d?.classification?.threat_type || 'event').replace(/_/g, ' ')} from ${d?.event?.source_ip || 'unknown'}`
-    setLiveEvents((prev) => [{ sev, msg, ts: Date.now() }, ...prev.slice(0, 49)])
+    const threat_type = d?.classification?.threat_type
+    setLiveEvents((prev) => [{ 
+      sev, 
+      msg: `${(threat_type || 'event').replace(/_/g, ' ')} from ${d?.event?.source_ip || 'unknown'}`, 
+      threat_type,
+      dest_ip: d?.event?.dest_ip,
+      bytes_sent: d?.event?.bytes_sent,
+      ts: Date.now() 
+    }, ...prev.slice(0, 49)])
     setLastEventTime(new Date().toISOString())
   }, []))
 
   useWebSocket('new_threat', useCallback((data: unknown) => {
     const d = data as any
     const sev = (d?.severity || 'medium').toUpperCase()
-    const msg = `${(d?.threat_type || 'event').replace(/_/g, ' ')} from ${d?.source_ip || 'unknown'}`
-    setLiveEvents((prev) => [{ sev, msg, ts: Date.now() }, ...prev.slice(0, 49)])
+    const threat_type = d?.threat_type
+    setLiveEvents((prev) => [{ 
+      sev, 
+      msg: `${(threat_type || 'event').replace(/_/g, ' ')} from ${d?.source_ip || 'unknown'}`, 
+      threat_type,
+      dest_ip: d?.dest_ip,
+      bytes_sent: d?.bytes_sent,
+      ts: Date.now() 
+    }, ...prev.slice(0, 49)])
     setLastEventTime(new Date().toISOString())
   }, []))
 
@@ -185,19 +204,21 @@ export default function DashboardPage() {
             </div>
           </div>
           <nav style={{ display: 'flex', gap: 4 }}>
-            {[
-              { href: '/dashboard', label: 'SOC Dashboard' },
-              { href: '/analysts',  label: 'Analysts' },
-              { href: '/tickets',   label: 'Tickets' },
-            ].map(({ href, label }) => (
-              <Link key={href} href={href} style={{
-                color: href === '/dashboard' ? '#00d4ff' : '#6b7a99',
-                fontSize: 12, textDecoration: 'none', padding: '3px 9px', borderRadius: 5,
-                background: href === '/dashboard' ? 'rgba(0,212,255,0.08)' : 'transparent',
-                fontWeight: href === '/dashboard' ? 600 : 400,
-              }}>{label}</Link>
-            ))}
+          {[
+            { href: '/dashboard', label: 'SOC Dashboard' },
+            { href: '/analysts',  label: 'Analysts' },
+            { href: '/tickets',   label: 'Tickets' },
+            { href: '/logs',      label: 'Logs' },
+          ].map(({ href, label }) => (
+            <Link key={href} href={href} style={{
+              color: pathname === href ? '#00d4ff' : '#6b7a99',
+              fontSize: 12, textDecoration: 'none', padding: '3px 9px', borderRadius: 5,
+              background: pathname === href ? 'rgba(0,212,255,0.08)' : 'transparent',
+              fontWeight: pathname === href ? 600 : 400,
+            }}>{label}</Link>
+          ))}
           </nav>
+
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -258,7 +279,7 @@ export default function DashboardPage() {
             minHeight: 0,
             overflow: 'hidden',
           }}>
-            <AttackMap alerts={alerts} />
+            <AttackMap incidents={incidents} />
             <LiveEventsPanel events={liveEvents} />
           </div>
         </div>

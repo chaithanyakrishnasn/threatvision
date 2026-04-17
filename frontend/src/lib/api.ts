@@ -10,6 +10,7 @@ import type {
   Ticket,
   TicketStats,
   LeaderboardEntry,
+  AuditLog,
 } from '@/types'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -130,10 +131,14 @@ export const dashboardExtApi = {
       brute_force: number
       c2_beacon: number
       lateral_movement: number
+      data_exfiltration: number
       false_positive: number
       benign: number
       total: number
     }>>(`/dashboard/threat-timeline?minutes=${minutes}`).then((r) => r.data),
+
+  getMetricDetails: (type: string) =>
+    apiClient.get(`/dashboard/metric-details?type=${type}`).then((r) => r.data),
 }
 
 // ── Recent live events ────────────────────────────────────────────────────────
@@ -144,6 +149,8 @@ export const liveEventsApi = {
       threat_type: string
       severity: string
       source_ip: string | null
+      dest_ip: string | null
+      raw_log: Record<string, any>
       confidence: number
       created_at: string
     }>>(`/threats/recent?limit=${limit}`).then((r) => r.data),
@@ -285,4 +292,26 @@ export const ticketsApi = {
     if (!res.ok) throw new Error('Failed to add comment')
     return res.json()
   },
+}
+
+// ── Audit Logs ────────────────────────────────────────────────────────────────
+export const auditLogsApi = {
+  list: (params?: {
+    actor_type?: string
+    action?: string
+    result?: string
+    actor_id?: string
+    target_type?: string
+    time_from?: string
+    time_to?: string
+    limit?: number
+    offset?: number
+  }) =>
+    apiClient.get<{ total: number; logs: AuditLog[] }>('/audit/logs', { params }).then((r) => r.data),
+
+  search: (q: string, limit = 50, offset = 0) =>
+    apiClient.get<{ total: number; logs: AuditLog[] }>('/audit/logs/search', { params: { q, limit, offset } }).then((r) => r.data),
+  
+  verify: () =>
+    apiClient.get<{ valid: boolean; checked: number; broken_at: string | null; total_rows: number }>('/audit/verify').then((r) => r.data),
 }

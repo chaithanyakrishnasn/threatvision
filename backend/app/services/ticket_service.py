@@ -122,6 +122,25 @@ class TicketService:
             "assigned_analyst_name": ticket.assigned_analyst_name,
         })
 
+        # Audit — fire-and-forget so it never delays ticket creation
+        from app.services.audit_service import fire_and_forget, log_event
+        fire_and_forget(log_event(
+            actor_type="system",
+            actor_id=data.source_type or "system",
+            action="ticket_created",
+            target_type="ticket",
+            target_id=str(ticket.id),
+            result="success",
+            metadata={
+                "ticket_number": ticket.ticket_number,
+                "title": ticket.title[:200],
+                "severity": ticket.severity,
+                "ticket_type": ticket.ticket_type,
+                "source_type": ticket.source_type,
+                "assigned_to": ticket.assigned_analyst_name,
+            },
+        ))
+
         logger.info("ticket_created", ticket_id=str(ticket.id), num=ticket.ticket_number)
         return ticket
 
@@ -235,6 +254,21 @@ class TicketService:
             "analyst_name": analyst.name,
             "severity": ticket.severity,
         })
+
+        from app.services.audit_service import fire_and_forget, log_event
+        fire_and_forget(log_event(
+            actor_type="human",
+            actor_id=assigned_by,
+            action="ticket_assigned",
+            target_type="ticket",
+            target_id=str(ticket.id),
+            result="success",
+            metadata={
+                "ticket_number": f"TICK-{ticket.ticket_number:04d}",
+                "analyst_name": analyst.name,
+                "severity": ticket.severity,
+            },
+        ))
         return ticket
 
     async def acknowledge_ticket(
@@ -313,6 +347,23 @@ class TicketService:
             "analyst_name": analyst_name,
             "resolution_type": resolution_type,
         })
+
+        from app.services.audit_service import fire_and_forget, log_event
+        fire_and_forget(log_event(
+            actor_type="human",
+            actor_id=analyst_id,
+            action="ticket_resolved",
+            target_type="ticket",
+            target_id=str(ticket.id),
+            result="success",
+            reasoning=resolution_notes[:2000] if resolution_notes else None,
+            metadata={
+                "ticket_number": f"TICK-{ticket.ticket_number:04d}",
+                "analyst_name": analyst_name,
+                "resolution_type": resolution_type,
+                "severity": ticket.severity,
+            },
+        ))
         return ticket
 
     async def escalate_ticket(
@@ -383,6 +434,24 @@ class TicketService:
             "to_analyst": to_analyst_name,
             "reason": reason,
         })
+
+        from app.services.audit_service import fire_and_forget, log_event
+        fire_and_forget(log_event(
+            actor_type="system",
+            actor_id="ticket_service",
+            action="ticket_escalated",
+            target_type="ticket",
+            target_id=str(ticket.id),
+            result="escalated",
+            reasoning=reason,
+            metadata={
+                "ticket_number": f"TICK-{ticket.ticket_number:04d}",
+                "from_analyst": from_analyst_name,
+                "to_analyst": to_analyst_name,
+                "escalation_count": ticket.escalation_count,
+                "severity": ticket.severity,
+            },
+        ))
         return ticket
 
     async def add_comment(

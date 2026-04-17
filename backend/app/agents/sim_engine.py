@@ -33,7 +33,7 @@ class SimulationConfig:
     name: str
     rounds: int = 6
     attack_types: list[str] = field(default_factory=lambda: [
-        "brute_force", "c2_beacon", "lateral_movement"
+        "brute_force", "c2_beacon", "lateral_movement", "data_exfiltration"
     ])
     target_context: dict = field(default_factory=dict)
     broadcast_live: bool = True

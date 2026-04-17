@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Shield, ArrowLeft, Users, Award, Clock, CheckCircle, Wifi, WifiOff, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { analystsApi } from '@/lib/api'
 import { useWebSocket } from '@/lib/websocket'
 import { showToast } from '@/lib/toast'
@@ -35,6 +36,8 @@ const SEV_COLOR: Record<string, string> = {
 }
 
 function NavBar() {
+  const pathname = usePathname()
+
   return (
     <header
       style={{
@@ -67,8 +70,9 @@ function NavBar() {
           { href: '/dashboard', label: 'SOC Dashboard' },
           { href: '/analysts', label: 'Analysts' },
           { href: '/tickets', label: 'Tickets' },
+          { href: '/logs', label: 'Logs' },
         ].map(({ href, label }) => {
-          const active = typeof window !== 'undefined' && window.location.pathname === href
+          const active = pathname === href
           return (
             <Link
               key={href}

@@ -82,6 +82,30 @@ class TriageDecision:
     sla_minutes: int
 
 
+# ── Audit helper ─────────────────────────────────────────────────────────────
+
+def _fire_blue_audit(
+    action: str,
+    incident_id: str,
+    reasoning: str,
+    confidence: float,
+    metadata: dict,
+) -> None:
+    """Schedule a fire-and-forget audit log entry for BlueAgent decisions."""
+    from app.services.audit_service import fire_and_forget, log_event
+    fire_and_forget(log_event(
+        actor_type="agent",
+        actor_id="blue_agent",
+        action=action,
+        target_type="incident",
+        target_id=incident_id,
+        result="success",
+        reasoning=reasoning,
+        confidence=confidence,
+        metadata=metadata,
+    ))
+
+
 # ── Fallback builders ─────────────────────────────────────────────────────────
 
 _PHASE_COMMANDS: dict[str, dict[str, list[str]]] = {
@@ -353,11 +377,37 @@ Respond with this exact JSON (no extra text):
                     recommended_priority=data.get("recommended_priority", "high"),
                 )
                 logger.info("blue_agent_incident_analyzed", via="claude", severity=analysis.severity)
+                _fire_blue_audit(
+                    action="agent_decision",
+                    incident_id=analysis.incident_id,
+                    reasoning=response.content,
+                    confidence=analysis.confidence,
+                    metadata={
+                        "decision_type": "incident_analysis",
+                        "severity": analysis.severity,
+                        "threat_types": threat_types,
+                        "source_ips": source_ips,
+                        "via": "claude",
+                        "recommended_priority": analysis.recommended_priority,
+                    },
+                )
                 return analysis
         except Exception as exc:
             logger.warning("blue_agent_analyze_error", error=str(exc))
 
-        return _fallback_incident_analysis(events, classification_results)
+        fallback = _fallback_incident_analysis(events, classification_results)
+        _fire_blue_audit(
+            action="agent_decision",
+            incident_id=fallback.incident_id,
+            reasoning=f"Fallback analysis: {fallback.threat_summary}",
+            confidence=fallback.confidence,
+            metadata={
+                "decision_type": "incident_analysis",
+                "severity": fallback.severity,
+                "via": "fallback",
+            },
+        )
+        return fallback
 
     # ── generate_playbook ─────────────────────────────────────────────────────
 
@@ -478,12 +528,36 @@ Respond with this exact JSON (no extra text):
                 )
                 self._store_playbook(playbook)
                 logger.info("blue_agent_playbook_generated", via="claude", phases=len(phases))
+                _fire_blue_audit(
+                    action="agent_decision",
+                    incident_id=playbook.incident_id,
+                    reasoning=response.content,
+                    confidence=0.9,
+                    metadata={
+                        "decision_type": "playbook_generated",
+                        "threat_type": threat_type,
+                        "phase_count": len(phases),
+                        "estimated_time_minutes": playbook.estimated_time_minutes,
+                        "via": "claude",
+                    },
+                )
                 return playbook
         except Exception as exc:
             logger.warning("blue_agent_playbook_error", error=str(exc))
 
         pb = _fallback_playbook(incident, threat_type, env)
         self._store_playbook(pb)
+        _fire_blue_audit(
+            action="agent_decision",
+            incident_id=pb.incident_id,
+            reasoning=f"Fallback playbook generated for {threat_type}",
+            confidence=0.7,
+            metadata={
+                "decision_type": "playbook_generated",
+                "threat_type": threat_type,
+                "via": "fallback",
+            },
+        )
         return pb
 
     # ── explain_alert ─────────────────────────────────────────────────────────
@@ -523,7 +597,7 @@ Respond with this exact JSON (no extra text):
             end = content.rfind("}") + 1
             if start >= 0 and end > start:
                 data = json.loads(content[start:end])
-                return AlertExplanation(
+                explanation = AlertExplanation(
                     what_happened=data.get("what_happened", ""),
                     why_suspicious=data.get("why_suspicious", ""),
                     false_positive_likelihood=data.get("false_positive_likelihood", "low"),
@@ -531,6 +605,19 @@ Respond with this exact JSON (no extra text):
                     recommended_action=data.get("recommended_action", ""),
                     confidence_explanation=data.get("confidence_explanation", ""),
                 )
+                _fire_blue_audit(
+                    action="agent_decision",
+                    incident_id=event.get("event_id") or "unknown",
+                    reasoning=response.content,
+                    confidence=float(classification.get("confidence", 0.5)),
+                    metadata={
+                        "decision_type": "alert_explained",
+                        "threat_type": classification.get("threat_type"),
+                        "source_ip": event.get("source_ip"),
+                        "via": "claude",
+                    },
+                )
+                return explanation
         except Exception as exc:
             logger.warning("blue_agent_explain_error", error=str(exc))
 
@@ -584,13 +671,28 @@ Respond with this exact JSON (no extra text):
             end = content.rfind("}") + 1
             if start >= 0 and end > start:
                 data = json.loads(content[start:end])
-                return TriageDecision(
+                triage = TriageDecision(
                     decision=data.get("decision", "investigate"),
                     reason=data.get("reason", ""),
                     priority=int(data.get("priority", 3)),
                     assigned_to=data.get("assigned_to", "tier2"),
                     sla_minutes=int(data.get("sla_minutes", 60)),
                 )
+                _fire_blue_audit(
+                    action="agent_decision",
+                    incident_id=event.get("event_id") or "unknown",
+                    reasoning=response.content,
+                    confidence=float(classification.get("confidence", 0.5)),
+                    metadata={
+                        "decision_type": "triage",
+                        "triage_decision": triage.decision,
+                        "priority": triage.priority,
+                        "assigned_to": triage.assigned_to,
+                        "threat_type": classification.get("threat_type"),
+                        "via": "claude",
+                    },
+                )
+                return triage
         except Exception as exc:
             logger.warning("blue_agent_triage_error", error=str(exc))
 

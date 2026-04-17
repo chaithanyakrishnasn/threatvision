@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import type { Alert } from '@/types'
+import type { Incident } from '@/types'
 
 // Approximate SVG coordinate positions (800x400 canvas)
 const IP_LOCATIONS: Record<string, { x: number; y: number; label: string }> = {
@@ -38,6 +38,14 @@ function getLocation(ip: string) {
   return { x: 300 + Math.random() * 200, y: 130 + Math.random() * 80, label: 'Unknown' }
 }
 
+function formatBytes(bytes: number = 0) {
+  if (!bytes) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
 interface AttackSource {
   id: string
   ip: string
@@ -45,38 +53,44 @@ interface AttackSource {
   y: number
   label: string
   severity: string
+  threat_type: string
+  bytes_sent?: number
   timestamp: number
 }
 
 interface Props {
-  alerts: Partial<Alert>[]
+  incidents: Partial<Incident>[]
 }
 
-export function AttackMap({ alerts }: Props) {
+export function AttackMap({ incidents }: Props) {
   const [sources, setSources] = useState<AttackSource[]>([])
+  const [hovered, setHovered] = useState<string | null>(null)
 
   useEffect(() => {
     const unique = new Map<string, AttackSource>()
-    alerts.slice(0, 10).forEach((a) => {
-      const ip = a.source_ip || ''
+    incidents.slice(0, 15).forEach((inc) => {
+      const ip = inc.source_ip || ''
       if (!ip || ip.startsWith('10.') || ip.startsWith('192.168.')) return
       if (!unique.has(ip)) {
         const loc = getLocation(ip)
         unique.set(ip, {
-          id: a.id || ip,
+          id: inc.id || ip,
           ip,
           x: loc.x + (Math.random() - 0.5) * 20,
           y: loc.y + (Math.random() - 0.5) * 20,
           label: loc.label,
-          severity: a.severity || 'medium',
-          timestamp: Date.now(),
+          severity: inc.severity || 'medium',
+          threat_type: (inc as any).threat_type || 'unknown',
+          bytes_sent: (inc as any).bytes_sent,
+          timestamp: new Date(inc.created_at || Date.now()).getTime(),
         })
       }
     })
     setSources(Array.from(unique.values()))
-  }, [alerts])
+  }, [incidents])
 
-  const getColor = (sev: string) => {
+  const getColor = (sev: string, threatType?: string) => {
+    if (threatType === 'data_exfiltration') return '#ff003c' // Brighter red for exfil
     if (sev === 'critical') return '#ff3b6b'
     if (sev === 'high')     return '#ff6b35'
     if (sev === 'medium')   return '#ffb800'
@@ -145,27 +159,71 @@ export function AttackMap({ alerts }: Props) {
 
           {/* Attack arcs and dots */}
           {sources.map((src, i) => {
-            const color = getColor(src.severity)
-            const dur = `${1.8 + (i % 4) * 0.5}s`
+            const isExfil = src.threat_type === 'data_exfiltration'
+            const color = getColor(src.severity, src.threat_type)
+            const dur = isExfil ? '1.2s' : `${1.8 + (i % 4) * 0.5}s`
             const midX = (src.x + TARGET.x) / 2
             const midY = Math.min(src.y, TARGET.y) - 40 - i * 5
             const pathD = `M${src.x},${src.y} Q${midX},${midY} ${TARGET.x},${TARGET.y}`
 
             return (
-              <g key={src.id}>
-                <path d={pathD} fill="none" stroke={color} strokeWidth={0.8} strokeOpacity={0.25} strokeDasharray="6 4" />
-                <circle r={2.5} fill={color} opacity={0.9}>
+              <g key={src.id} 
+                 onMouseEnter={() => setHovered(src.id)}
+                 onMouseLeave={() => setHovered(null)}
+                 style={{ cursor: 'pointer' }}>
+                <path 
+                  d={pathD} 
+                  fill="none" 
+                  stroke={color} 
+                  strokeWidth={isExfil ? 2.5 : 0.8} 
+                  strokeOpacity={isExfil ? 0.7 : 0.25} 
+                  strokeDasharray={isExfil ? "none" : "6 4"} 
+                >
+                  {isExfil && (
+                    <animate attributeName="stroke-opacity" values="0.7;0.2;0.7" dur="1s" repeatCount="indefinite" />
+                  )}
+                </path>
+                <circle r={isExfil ? 3.5 : 2.5} fill={color} opacity={0.9}>
                   <animateMotion dur={dur} repeatCount="indefinite" path={pathD} />
                   <animate attributeName="opacity" values="0;1;1;0" dur={dur} repeatCount="indefinite" />
                 </circle>
-                <circle cx={src.x} cy={src.y} r={6} fill={color} opacity={0.15}>
-                  <animate attributeName="r" values="5;12;5" dur="2.5s" repeatCount="indefinite" />
-                  <animate attributeName="opacity" values="0.15;0;0.15" dur="2.5s" repeatCount="indefinite" />
+                <circle cx={src.x} cy={src.y} r={isExfil ? 10 : 6} fill={color} opacity={0.15}>
+                  <animate attributeName="r" values={isExfil ? "8;18;8" : "5;12;5"} dur={isExfil ? "1.5s" : "2.5s"} repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.15;0;0.15" dur={isExfil ? "1.5s" : "2.5s"} repeatCount="indefinite" />
                 </circle>
-                <circle cx={src.x} cy={src.y} r={4} fill={color} opacity={0.9} />
-                <text x={src.x + 7} y={src.y + 4} fill={color} fontSize={8} opacity={0.85} fontFamily="JetBrains Mono, monospace">
-                  {src.label}
-                </text>
+                <circle cx={src.x} cy={src.y} r={isExfil ? 5 : 4} fill={color} opacity={0.9} />
+                
+                {/* Tooltip on hover */}
+                {hovered === src.id && (
+                  <foreignObject x={src.x + 10} y={src.y - 40} width="160" height="60">
+                    <div style={{
+                      background: 'rgba(10, 14, 26, 0.95)',
+                      border: `1px solid ${color}`,
+                      borderRadius: '4px',
+                      padding: '6px 10px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                      pointerEvents: 'none',
+                    }}>
+                      <div style={{ color: color, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>
+                        {isExfil ? '⚠️ DATA EXFILTRATION' : src.threat_type.replace(/_/g, ' ')}
+                      </div>
+                      <div style={{ color: '#e8eaf0', fontSize: '11px', fontFamily: 'monospace' }}>
+                        {src.ip}
+                      </div>
+                      {isExfil && src.bytes_sent && (
+                        <div style={{ color: '#ff3b6b', fontSize: '11px', fontWeight: 700, marginTop: 2 }}>
+                          {formatBytes(src.bytes_sent)} transferred
+                        </div>
+                      )}
+                    </div>
+                  </foreignObject>
+                )}
+
+                {!hovered && (
+                  <text x={src.x + 7} y={src.y + 4} fill={color} fontSize={8} opacity={0.85} fontFamily="JetBrains Mono, monospace">
+                    {src.label}
+                  </text>
+                )}
               </g>
             )
           })}

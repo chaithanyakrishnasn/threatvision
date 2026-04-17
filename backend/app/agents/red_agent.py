@@ -94,6 +94,36 @@ _FALLBACK_SCENARIOS: dict[str, dict] = {
         "expected_indicators": ["Large bytes_sent >50MB", "External destination IP", "curl/wget command", "Compressed file names"],
         "difficulty": "medium",
     },
+    "data_exfiltration": {
+        "mitre_techniques": [
+            "T1048 - Exfiltration Over Alternative Protocol",
+            "T1041 - Exfiltration Over C2 Channel",
+            "T1560 - Archive Collected Data",
+            "T1071.001 - Web Protocols",
+        ],
+        "tactics_description": (
+            "Malicious actor exfiltrates sensitive internal data (PII, credentials, source code) "
+            "to attacker-controlled external servers via encrypted HTTPS/HTTP POST requests. "
+            "Transfers exceed 50 MB per session to maximise data theft; destination IPs reside "
+            "in Tor exit-node ranges (185.220.x.x) to obscure attribution."
+        ),
+        "event_sequence": [
+            "1. Enumerate internal file servers and databases for high-value assets",
+            "2. Compress and optionally encrypt target files into staged archives",
+            "3. Initiate large outbound POST to attacker staging server over HTTPS",
+            "4. Repeat in multiple sessions to transfer complete dataset",
+            "5. Validate receipt on attacker side; delete local staging artefacts",
+            "6. Rotate destination IPs to evade reputation-based blocking",
+        ],
+        "expected_indicators": [
+            "bytes_sent > 50 MB to external IP",
+            "Destination in 185.220.x.x Tor exit range",
+            "flags: large_transfer, suspicious_destination, data_exfiltration_pattern",
+            "curl.exe / certutil.exe / powershell.exe initiating POST",
+            "Rule TV-007 triggered (Data Exfiltration Volume)",
+        ],
+        "difficulty": "medium",
+    },
 }
 
 _ATTACKER_IPS = [f"185.220.101.{i}" for i in range(1, 20)] + [
@@ -104,6 +134,26 @@ _TARGETS = ["10.0.1.50", "10.0.1.100", "10.0.1.101", "10.0.50.100"]
 
 
 # ── Red Agent ─────────────────────────────────────────────────────────────────
+
+def _fire_red_audit(
+    action: str,
+    target_id: str,
+    reasoning: str,
+    metadata: dict,
+) -> None:
+    """Schedule a fire-and-forget audit log entry for RedAgent decisions."""
+    from app.services.audit_service import fire_and_forget, log_event
+    fire_and_forget(log_event(
+        actor_type="agent",
+        actor_id="red_agent",
+        action=action,
+        target_type="simulation",
+        target_id=target_id,
+        result="success",
+        reasoning=reasoning,
+        metadata=metadata,
+    ))
+
 
 class RedAgent:
     """AI-powered attacker that generates realistic attack TTPs."""
@@ -251,6 +301,18 @@ Respond with this exact JSON structure (no extra text):
                 )
                 self._store_memory(scenario)
                 logger.info("red_agent_scenario_generated", attack_type=attack_type, via="claude")
+                _fire_red_audit(
+                    action="agent_decision",
+                    target_id=scenario.scenario_id,
+                    reasoning=response.content,
+                    metadata={
+                        "decision_type": "attack_scenario_generated",
+                        "attack_type": attack_type,
+                        "mitre_techniques": scenario.mitre_techniques[:3],
+                        "difficulty": scenario.difficulty,
+                        "via": "claude",
+                    },
+                )
                 return scenario
         except Exception as exc:
             logger.warning("red_agent_claude_error", error=str(exc))
@@ -271,6 +333,18 @@ Respond with this exact JSON structure (no extra text):
             difficulty=tmpl["difficulty"],
         )
         self._store_memory(scenario)
+        _fire_red_audit(
+            action="agent_decision",
+            target_id=scenario.scenario_id,
+            reasoning=f"Fallback scenario: {scenario.tactics_description}",
+            metadata={
+                "decision_type": "attack_scenario_generated",
+                "attack_type": attack_type,
+                "mitre_techniques": scenario.mitre_techniques[:3],
+                "difficulty": scenario.difficulty,
+                "via": "fallback",
+            },
+        )
         return scenario
 
     async def generate_attack_events(
@@ -286,7 +360,8 @@ Respond with this exact JSON structure (no extra text):
             "brute_force": "brute_force",
             "c2_beacon": "c2_beacon",
             "lateral_movement": "lateral_movement",
-            "exfiltration": "lateral_movement",  # closest scenario type
+            "exfiltration": "data_exfiltration",
+            "data_exfiltration": "data_exfiltration",
         }
         scenario_type = attack_map.get(scenario.attack_type, "brute_force")
 

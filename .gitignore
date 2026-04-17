@@ -10,7 +10,6 @@ build/
 .eggs/
 *.egg
 DEMO.md
-PROJECT_BRAIN.md
 .pytest_cache/
 .coverage
 htmlcov/

@@ -27,5 +27,6 @@ class Incident(UUIDMixin, TimestampMixin, Base):
     rule_matches: Mapped[list] = mapped_column(JSON, default=list)
     cross_layer_correlated: Mapped[bool] = mapped_column(Boolean, default=False)
     anomaly_score: Mapped[float] = mapped_column(Float, default=0.0)
+    bytes_sent: Mapped[int] = mapped_column(default=0)
 
     alerts: Mapped[list["Alert"]] = relationship("Alert", back_populates="incident", lazy="selectin")  # type: ignore

@@ -272,6 +272,30 @@ class EventConsumer:
                     "classification": classification.to_dict(),
                 })
 
+            # ── Audit: log ingested events (HIGH/CRITICAL threats only, fire-and-forget)
+            if classification.is_threat and not classification.is_false_positive:
+                sev = classification.severity.upper()
+                if sev in ("HIGH", "CRITICAL"):
+                    from app.services.audit_service import fire_and_forget, log_event
+                    fire_and_forget(log_event(
+                        actor_type="system",
+                        actor_id="ingestion_pipeline",
+                        action="event_ingested",
+                        target_type="threat_event",
+                        target_id=event_dict.get("event_id") or msg_id,
+                        result="success",
+                        metadata={
+                            "event_type": event_dict.get("event_type") or event_dict.get("layer"),
+                            "source_ip": event_dict.get("source_ip"),
+                            "dest_ip": event_dict.get("dest_ip"),
+                            "threat_type": classification.threat_type,
+                            "severity": classification.severity,
+                            "confidence": classification.confidence,
+                            "bytes_sent": int(event_dict.get("bytes_sent") or 0),
+                            "msg_id": msg_id,
+                        },
+                    ))
+
             await r.xack(STREAM_KEY, CONSUMER_GROUP, msg_id)
 
         except Exception as exc:
@@ -367,6 +391,7 @@ async def _persist_classification(event: dict, classification) -> None:
                     rule_matches=classification.rule_matches,
                     cross_layer_correlated=classification.cross_layer_correlated,
                     anomaly_score=classification.anomaly_score,
+                    bytes_sent=event.get("bytes_sent") or 0,
                 )
                 session.add(incident)
 

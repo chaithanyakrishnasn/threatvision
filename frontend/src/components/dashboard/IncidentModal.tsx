@@ -1,12 +1,21 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { AlertTriangle, ShieldAlert, ArrowRight, Activity, Globe, ShieldCheck, Zap } from 'lucide-react'
 import { playbooksApi } from '@/lib/api'
 import type { Incident, IncidentWithClassification } from '@/types'
 
 // Fields beyond base Incident arrive at runtime from the enriched backend response.
 // We accept the base Partial<Incident> type at the boundary and cast internally.
 type ModalIncident = Partial<IncidentWithClassification>
+
+function formatBytes(bytes: number = 0) {
+  if (!bytes) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
 
 interface Props {
   incident: Partial<Incident>   // accepts what the page stores
@@ -115,6 +124,31 @@ export function IncidentModal({ incident: _incident, onClose }: Props) {
           flexDirection: 'column',
           gap: 12,
         }}>
+          {incident.threat_type === 'data_exfiltration' && (
+            <div style={{
+              background: 'rgba(255, 59, 107, 0.1)',
+              border: '1px solid rgba(255, 59, 107, 0.3)',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              animation: 'pulse-red 2s infinite ease-in-out',
+            }}>
+              <AlertTriangle style={{ color: '#ff3b6b', width: 24, height: 24 }} />
+              <div>
+                <div style={{ color: '#ff3b6b', fontWeight: 700, fontSize: 14 }}>SENSITIVE DATA EXFILTRATION DETECTED</div>
+                <div style={{ color: '#ff3b6b', fontSize: 12, opacity: 0.8 }}>Sensitive data may have been exfiltrated to an external destination. Immediate action required.</div>
+              </div>
+              <style>{`
+                @keyframes pulse-red {
+                  0% { background: rgba(255, 59, 107, 0.1); }
+                  50% { background: rgba(255, 59, 107, 0.2); }
+                  100% { background: rgba(255, 59, 107, 0.1); }
+                }
+              `}</style>
+            </div>
+          )}
 
           {/* WHY WAS THIS FLAGGED? */}
           <Row>
@@ -139,6 +173,48 @@ export function IncidentModal({ incident: _incident, onClose }: Props) {
             </Row>
           )}
 
+          {/* DATA TRANSFER DETAILS (for Exfiltration) */}
+          {incident.threat_type === 'data_exfiltration' && (
+            <Row>
+              <SectionLabel color="#ff3b6b">📤 DATA TRANSFER DETAILS</SectionLabel>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <div style={{ color: '#6b7a99', fontSize: 11, marginBottom: 4 }}>BYTES EXFILTRATED</div>
+                  <div style={{ color: '#ff3b6b', fontSize: 20, fontWeight: 700, fontFamily: 'monospace' }}>
+                    {formatBytes(incident.bytes_sent)}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: '#6b7a99', fontSize: 11, marginBottom: 4 }}>DESTINATION RISK</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Globe style={{ width: 14, height: 14, color: '#ff3b6b' }} />
+                    <span style={{ color: '#e8eaf0', fontSize: 13, fontWeight: 600 }}>
+                      {incident.dest_ip?.startsWith('185.220.') ? 'Tor Exit Node (High Risk)' : 'External / Untrusted'}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <div style={{ color: '#6b7a99', fontSize: 11, marginBottom: 4 }}>TRAFFIC FLOW</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#0a0e1a', padding: '10px 14px', borderRadius: 6, border: '1px solid #1e2d4a' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ color: '#6b7a99', fontSize: 10 }}>SOURCE</span>
+                      <span style={{ color: '#e8eaf0', fontFamily: 'monospace', fontSize: 13 }}>{incident.source_ip}</span>
+                    </div>
+                    <ArrowRight style={{ width: 16, height: 16, color: '#1e2d4a' }} />
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ color: '#6b7a99', fontSize: 10 }}>DESTINATION</span>
+                      <span style={{ color: '#ff3b6b', fontFamily: 'monospace', fontSize: 13 }}>{incident.dest_ip}</span>
+                    </div>
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                      <Activity style={{ width: 14, height: 14, color: '#ff3b6b' }} />
+                      <span style={{ color: '#ff3b6b', fontWeight: 700, fontSize: 12 }}>Egress Spike</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Row>
+          )}
+
           {/* Rule Engine */}
           <Row>
             <SectionLabel color="#ff3b6b">🛡 RULE ENGINE (70% WEIGHT)</SectionLabel>
@@ -146,10 +222,19 @@ export function IncidentModal({ incident: _incident, onClose }: Props) {
               <Muted>No rules matched — anomaly-driven detection</Muted>
             ) : (
               incident.rule_matches!.map((r) => (
-                <div key={r} style={{ fontSize: 13, marginBottom: 4 }}>
+                <div key={r} style={{
+                  fontSize: 13, marginBottom: 4,
+                  padding: r === 'TV-007' ? '6px 10px' : '0',
+                  background: r === 'TV-007' ? 'rgba(255,59,107,0.1)' : 'transparent',
+                  border: r === 'TV-007' ? '1px solid rgba(255,59,107,0.3)' : 'none',
+                  borderRadius: 4,
+                }}>
                   <span style={{ color: '#6b7a99' }}>›</span>
-                  <span style={{ fontFamily: 'monospace', color: '#00d4ff', marginLeft: 6 }}>{r}</span>
+                  <span style={{ fontFamily: 'monospace', color: r === 'TV-007' ? '#ff3b6b' : '#00d4ff', marginLeft: 6, fontWeight: r === 'TV-007' ? 700 : 400 }}>{r}</span>
                   <span style={{ color: '#00ff9d', marginLeft: 8, fontSize: 11 }}>✓ matched</span>
+                  {r === 'TV-007' && (
+                    <span style={{ color: '#ff3b6b', marginLeft: 10, fontSize: 11, fontWeight: 700 }}>[EXFILTRATION THRESHOLD EXCEEDED]</span>
+                  )}
                 </div>
               ))
             )}
@@ -172,13 +257,19 @@ export function IncidentModal({ incident: _incident, onClose }: Props) {
                   color: '#a78bfa', fontSize: 11, padding: '3px 10px', borderRadius: 12,
                 }}>{t.split(' - ')[0]}</span>
               ))}
-              {(incident.mitre_techniques ?? []).map((t) => (
-                <span key={t} style={{
-                  background: 'rgba(83,74,183,0.2)', border: '1px solid #534ab7',
-                  color: '#afa9ec', fontSize: 11, padding: '3px 10px', borderRadius: 12,
-                  fontFamily: 'monospace',
-                }}>{t.split(' - ')[0]}</span>
-              ))}
+              {(incident.mitre_techniques ?? []).map((t) => {
+                const isExfil = t.includes('T1048')
+                return (
+                  <span key={t} style={{
+                    background: isExfil ? 'rgba(255,59,107,0.2)' : 'rgba(83,74,183,0.2)',
+                    border: `1px solid ${isExfil ? '#ff3b6b' : '#534ab7'}`,
+                    color: isExfil ? '#ff3b6b' : '#afa9ec',
+                    fontSize: 11, padding: '3px 10px', borderRadius: 12,
+                    fontFamily: 'monospace',
+                    fontWeight: isExfil ? 700 : 400,
+                  }}>{t.split(' - ')[0]} {isExfil ? '(DATA EXFIL)' : ''}</span>
+                )
+              })}
               {(incident.mitre_tactics?.length ?? 0) + (incident.mitre_techniques?.length ?? 0) === 0 && (
                 <Muted>No MITRE techniques mapped</Muted>
               )}

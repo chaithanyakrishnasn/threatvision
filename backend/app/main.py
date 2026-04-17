@@ -106,6 +106,7 @@ app = FastAPI(
         {"name": "analysts",    "description": "Analyst management — CRUD, workload, leaderboard"},
         {"name": "tickets",     "description": "Ticket engine — lifecycle, SLA, escalation, activities"},
         {"name": "projects",    "description": "Project management — security score, analyst assignment"},
+        {"name": "audit",       "description": "Immutable hash-chained audit log — query, search, verify"},
     ],
 )
 
@@ -116,6 +117,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Phase 6 — Audit middleware (fire-and-forget, adds zero latency to hot path)
+from app.middleware.audit_middleware import AuditMiddleware
+app.add_middleware(AuditMiddleware)
 
 app.include_router(api_router)
 

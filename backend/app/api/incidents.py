@@ -52,6 +52,7 @@ _DEMO_INCIDENTS = [
         "recommended_action": "Isolate pivot host, revoke credentials, escalate to CRITICAL incident.",
         "rule_matches": ["TV-006", "TV-007"],
         "cross_layer_correlated": True,
+        "bytes_sent": 149200000,
     },
     {
         "threat_type": "data_exfiltration",
@@ -65,6 +66,7 @@ _DEMO_INCIDENTS = [
         "recommended_action": "Block egress path, preserve forensic image, notify DLP team.",
         "rule_matches": ["TV-008", "TV-009"],
         "cross_layer_correlated": False,
+        "bytes_sent": 149200000,
     },
     {
         "threat_type": "c2_beacon",
@@ -78,6 +80,7 @@ _DEMO_INCIDENTS = [
         "recommended_action": "Isolate affected host, block C2 destination, initiate IR playbook.",
         "rule_matches": ["TV-003"],
         "cross_layer_correlated": False,
+        "bytes_sent": 450,
     },
     {
         "threat_type": "brute_force",
@@ -91,6 +94,7 @@ _DEMO_INCIDENTS = [
         "recommended_action": "Block source IP, enforce MFA, review auth logs for compromised accounts.",
         "rule_matches": ["TV-001", "TV-002"],
         "cross_layer_correlated": True,
+        "bytes_sent": 840,
     },
     {
         "threat_type": "lateral_movement",
@@ -104,6 +108,7 @@ _DEMO_INCIDENTS = [
         "recommended_action": "Isolate pivot host, revoke credentials, escalate to CRITICAL incident.",
         "rule_matches": ["TV-006"],
         "cross_layer_correlated": True,
+        "bytes_sent": 24500,
     },
     {
         "threat_type": "false_positive",
@@ -117,6 +122,7 @@ _DEMO_INCIDENTS = [
         "recommended_action": "No action required — confirmed as scheduled backup activity.",
         "rule_matches": ["TV-012"],
         "cross_layer_correlated": False,
+        "bytes_sent": 324000000,
     },
     {
         "threat_type": "data_exfiltration",
@@ -130,6 +136,7 @@ _DEMO_INCIDENTS = [
         "recommended_action": "Block egress path, preserve forensic image, notify DLP team.",
         "rule_matches": ["TV-008"],
         "cross_layer_correlated": False,
+        "bytes_sent": 91800000,
     },
     {
         "threat_type": "c2_beacon",
@@ -143,6 +150,7 @@ _DEMO_INCIDENTS = [
         "recommended_action": "Isolate affected host, block C2 destination, initiate IR playbook.",
         "rule_matches": ["TV-003", "TV-004", "TV-005"],
         "cross_layer_correlated": True,
+        "bytes_sent": 620,
     },
 ]
 
@@ -178,6 +186,7 @@ def _make_demo_response(limit: int) -> list[dict]:
             "rule_matches": tmpl["rule_matches"],
             "cross_layer_correlated": tmpl["cross_layer_correlated"],
             "anomaly_score": round(tmpl["confidence"] * 0.8, 3),
+            "bytes_sent": tmpl.get("bytes_sent", 0),
         })
     return result
 
@@ -230,6 +239,7 @@ async def list_incidents(
             "rule_matches": i.rule_matches or [],
             "cross_layer_correlated": i.cross_layer_correlated or False,
             "anomaly_score": i.anomaly_score or 0.0,
+            "bytes_sent": i.bytes_sent or 0,
         }
         for i in incidents
     ]
